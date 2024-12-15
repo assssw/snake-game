@@ -182,7 +182,6 @@ function showTasks() {
         }, 300);
     }
 }
-
 // Игровые функции
 function tryStartGame() {
     const now = Date.now();
@@ -195,6 +194,7 @@ function tryStartGame() {
     }
     startGame();
 }
+
 function startGame() {
     hideAllContainers();
     setTimeout(() => {
@@ -357,121 +357,120 @@ function render() {
             ctx.shadowBlur = 0;
         }
     }
-
-    // Рисуем яблоко
-    ctx.save();
-    ctx.shadowBlur = 15;
-    ctx.shadowColor = "red";
-    
-    const appleGradient = ctx.createRadialGradient(
-        appleX * gridSize + gridSize/2,
-        appleY * gridSize + gridSize/2,
-        0,
-        appleX * gridSize + gridSize/2,
-        appleY * gridSize + gridSize/2,
-        gridSize/2
-    );
-    appleGradient.addColorStop(0, '#ff0000');
-    appleGradient.addColorStop(1, '#990000');
-    ctx.fillStyle = appleGradient;
-    
-    const pulseScale = 1 + Math.sin(Date.now() / 200) * 0.1;
-    ctx.translate(
-        appleX * gridSize + gridSize/2,
-        appleY * gridSize + gridSize/2
-    );
-    ctx.scale(pulseScale, pulseScale);
-    
-    ctx.beginPath();
-    ctx.arc(0, 0, gridSize/2 - 1, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Блик на яблоке
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-    ctx.beginPath();
-    ctx.arc(-gridSize/6, -gridSize/6, gridSize/6, 0, Math.PI * 2);
-    ctx.fill();
-    
-    ctx.restore();
-}
-function gameOver() {
-    isGameRunning = false;
-    
-    const canvasRect = canvas.getBoundingClientRect();
-    const headScreenX = canvasRect.left + headX * gridSize + gridSize/2;
-    const headScreenY = canvasRect.top + headY * gridSize + gridSize/2;
-    
-    createParticles(headScreenX, headScreenY, snakeColor, 20);
-    createParticles(headScreenX, headScreenY, '#ff0000', 15);
-    
-    const gameOverScreen = document.createElement('div');
-    gameOverScreen.className = 'game-over-screen';
-    
-    const title = document.createElement('h1');
-    title.className = 'game-over-title';
-    title.textContent = 'GAME OVER';
-    
-    const stats = document.createElement('div');
-    stats.className = 'game-over-stats';
-    
-    let recordText = '';
-    if (score > bestScore) {
-        bestScore = score;
-        recordText = `<p style="color: #ffd700; text-shadow: 0 0 10px #ffd700;">🏆 Новый рекорд!</p>`;
-        createParticles(window.innerWidth/2, window.innerHeight/2, '#ffd700', 20);
-    }
-    
-    stats.innerHTML = `
-        ${recordText}
-        <p>Счет: ${score}</p>
-        <p style="color: #4CAF50;">Заработано: ☀️ ${sun}</p>
-    `;
-    
-    const buttons = document.createElement('div');
-    buttons.className = 'game-over-buttons';
-    
-    const retryButton = document.createElement('button');
-    retryButton.className = 'button';
-    retryButton.innerHTML = '🔄 Играть снова';
-    retryButton.onclick = () => {
-        gameOverScreen.style.animation = 'fadeOut 0.3s ease-out';
-        setTimeout(() => {
-            gameOverScreen.remove();
-            tryStartGame();
-        }, 300);
-    };
-    
-    const menuButton = document.createElement('button');
-    menuButton.className = 'button';
-    menuButton.innerHTML = '🏠 Главное меню';
-    menuButton.onclick = () => {
-        gameOverScreen.style.animation = 'fadeOut 0.3s ease-out';
-        setTimeout(() => {
-            gameOverScreen.remove();
-            showMenu();
-        }, 300);
-    };
-    
-    buttons.appendChild(retryButton);
-    buttons.appendChild(menuButton);
-    
-    gameOverScreen.appendChild(title);
-    gameOverScreen.appendChild(stats);
-    gameOverScreen.appendChild(buttons);
-    
-    setTimeout(() => {
-        document.body.appendChild(gameOverScreen);
-        createParticles(0, window.innerHeight/2, '#ff0000', 10);
-        createParticles(window.innerWidth, window.innerHeight/2, '#ff0000', 10);
-        createParticles(window.innerWidth/2, 0, '#ff0000', 10);
-        createParticles(window.innerWidth/2, window.innerHeight, '#ff0000', 10);
-    }, 500);
-    
-    saveUserData();
-    sendDataToBot();
-}
-
-function stopGame() {
+     // Рисуем яблоко
+     ctx.save();
+     ctx.shadowBlur = 15;
+     ctx.shadowColor = "red";
+     
+     const appleGradient = ctx.createRadialGradient(
+         appleX * gridSize + gridSize/2,
+         appleY * gridSize + gridSize/2,
+         0,
+         appleX * gridSize + gridSize/2,
+         appleY * gridSize + gridSize/2,
+         gridSize/2
+     );
+     appleGradient.addColorStop(0, '#ff0000');
+     appleGradient.addColorStop(1, '#990000');
+     ctx.fillStyle = appleGradient;
+     
+     const pulseScale = 1 + Math.sin(Date.now() / 200) * 0.1;
+     ctx.translate(
+         appleX * gridSize + gridSize/2,
+         appleY * gridSize + gridSize/2
+     );
+     ctx.scale(pulseScale, pulseScale);
+     
+     ctx.beginPath();
+     ctx.arc(0, 0, gridSize/2 - 1, 0, Math.PI * 2);
+     ctx.fill();
+     
+     // Блик на яблоке
+     ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+     ctx.beginPath();
+     ctx.arc(-gridSize/6, -gridSize/6, gridSize/6, 0, Math.PI * 2);
+     ctx.fill();
+     
+     ctx.restore();
+ }
+ 
+ function gameOver() {
+     isGameRunning = false;
+     
+     const canvasRect = canvas.getBoundingClientRect();
+     const headScreenX = canvasRect.left + headX * gridSize + gridSize/2;
+     const headScreenY = canvasRect.top + headY * gridSize + gridSize/2;
+     
+     createParticles(headScreenX, headScreenY, snakeColor, 20);
+     createParticles(headScreenX, headScreenY, '#ff0000', 15);
+     
+     const gameOverScreen = document.createElement('div');
+     gameOverScreen.className = 'game-over-screen';
+     
+     const title = document.createElement('h1');
+     title.className = 'game-over-title';
+     title.textContent = 'GAME OVER';
+     
+     const stats = document.createElement('div');
+     stats.className = 'game-over-stats';
+     
+     let recordText = '';
+     if (score > bestScore) {
+         bestScore = score;
+         recordText = `<p style="color: #ffd700; text-shadow: 0 0 10px #ffd700;">🏆 Новый рекорд!</p>`;
+         createParticles(window.innerWidth/2, window.innerHeight/2, '#ffd700', 20);
+     }
+     
+     stats.innerHTML = `
+         ${recordText}
+         <p>Счет: ${score}</p>
+         <p style="color: #4CAF50;">Заработано: ☀️ ${sun}</p>
+     `;
+     
+     const buttons = document.createElement('div');
+     buttons.className = 'game-over-buttons';
+     
+     const retryButton = document.createElement('button');
+     retryButton.className = 'button';
+     retryButton.innerHTML = '🔄 Играть снова';
+     retryButton.onclick = () => {
+         gameOverScreen.style.animation = 'fadeOut 0.3s ease-out';
+         setTimeout(() => {
+             gameOverScreen.remove();
+             tryStartGame();
+         }, 300);
+     };
+     
+     const menuButton = document.createElement('button');
+     menuButton.className = 'button';
+     menuButton.innerHTML = '🏠 Главное меню';
+     menuButton.onclick = () => {
+         gameOverScreen.style.animation = 'fadeOut 0.3s ease-out';
+         setTimeout(() => {
+             gameOverScreen.remove();
+             showMenu();
+         }, 300);
+     };
+     
+     buttons.appendChild(retryButton);
+     buttons.appendChild(menuButton);
+     
+     gameOverScreen.appendChild(title);
+     gameOverScreen.appendChild(stats);
+     gameOverScreen.appendChild(buttons);
+     
+     setTimeout(() => {
+         document.body.appendChild(gameOverScreen);
+         createParticles(0, window.innerHeight/2, '#ff0000', 10);
+         createParticles(window.innerWidth, window.innerHeight/2, '#ff0000', 10);
+         createParticles(window.innerWidth/2, 0, '#ff0000', 10);
+         createParticles(window.innerWidth/2, window.innerHeight, '#ff0000', 10);
+     }, 500);
+     
+     saveUserData();
+     sendDataToBot();
+ }   
+ function stopGame() {
     isGameRunning = false;
     if (moveTimer) {
         clearInterval(moveTimer);
@@ -551,6 +550,7 @@ function setupEventListeners() {
     canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
     canvas.addEventListener('touchend', handleTouchEnd);
 }
+
 // Вспомогательные функции
 function resetGame() {
     headX = 10;
@@ -571,9 +571,13 @@ function resetGame() {
 function updateScore() {
     const scoreElement = document.getElementById('score');
     const sunElement = document.getElementById('sun-display');
+    const sunBalanceElement = document.getElementById('sun-balance');
     
     scoreElement.textContent = `Score: ${score}`;
     sunElement.textContent = `☀️ ${sun}`;
+    if (sunBalanceElement) {
+        sunBalanceElement.textContent = sun;
+    }
     
     scoreElement.classList.add('highlight');
     sunElement.classList.add('highlight');
@@ -601,7 +605,6 @@ function loadUserData() {
     const savedData = localStorage.getItem('starSnakeData');
     if (savedData) {
         const data = JSON.parse(savedData);
-        bestScore = data.bestScore || 0;
         sun = data.sun || 0;
         hasSunSkin = data.hasSunSkin || false;
         hasPremiumSkin = data.hasPremiumSkin || false;
@@ -625,19 +628,17 @@ function loadUserData() {
         // Проверяем, было ли задание выполнено
         const subscriptionTask = document.getElementById('subscription-task');
         if (subscriptionTask && data.subscriptionRewardReceived) {
-            subscriptionTask.remove(); // Полностью удаляем элемент
+            subscriptionTask.remove();
         }
         
         updateSnakeColor();
     }
-    document.getElementById('best-score').textContent = bestScore;
     document.getElementById('sun-balance').textContent = sun;
     updateTimer();
 }
 
 function saveUserData() {
     const data = {
-        bestScore,
         sun,
         hasSunSkin,
         hasPremiumSkin,

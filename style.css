@@ -232,13 +232,14 @@ body::after {
 #score-container {
     width: 100%;
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
     gap: 10px;
     margin-bottom: 15px;
 }
 
 .score-item {
     flex: 1;
+    max-width: 200px;
     background: rgba(255, 255, 255, 0.1);
     padding: 10px;
     border-radius: 8px;
@@ -247,6 +248,7 @@ body::after {
     justify-content: center;
     gap: 8px;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    color: #ffd700;
 }
 
 .score-item:hover {

@@ -156,8 +156,8 @@ def log_transaction(user_id, type, amount):
 def get_leaderboard():
     conn = sqlite3.connect('snake_game.db')
     c = conn.cursor()
-    c.execute('''SELECT username, best_score FROM users 
-                 ORDER BY best_score DESC LIMIT 10''')
+    c.execute('''SELECT username, sun FROM users 
+                 ORDER BY sun DESC LIMIT 10''')
     data = c.fetchall()
     conn.close()
     return data
@@ -189,25 +189,34 @@ def start(message):
     referrer_id = args[1] if len(args) > 1 else None
     
     # Регистрация нового пользователя
-    if not get_user_data(user_id).get('username'):
+    user_data = get_user_data(user_id)
+    if not user_data.get('username'):
         initial_sun = 20 if referrer_id else 0
-        update_user_data(user_id, {
+        user_data = {
             'username': username,
             'best_score': 0,
             'sun': initial_sun,
             'has_sun_skin': False,
             'has_premium_skin': False,
-            'referrer_id': referrer_id
-        })
+            'referrer_id': referrer_id,
+            'referral_count': 0
+        }
+        update_user_data(user_id, user_data)
         
         # Награждаем реферера
         if referrer_id:
             referrer_data = get_user_data(referrer_id)
             if referrer_data.get('username'):
+                # Обновляем данные реферера
                 referrer_data['sun'] = referrer_data.get('sun', 0) + 20
                 referrer_data['referral_count'] = referrer_data.get('referral_count', 0) + 1
                 update_user_data(referrer_id, referrer_data)
                 
+                # Логируем транзакции
+                log_transaction(referrer_id, 'referral_bonus', 20)
+                log_transaction(user_id, 'referral_registration', 20)
+                
+                # Уведомления
                 bot.send_message(
                     referrer_id, 
                     f"🎉 Новый реферал! Получено:\n"
@@ -259,9 +268,9 @@ def play_button(message):
 @bot.message_handler(func=lambda message: message.text == "🏆 Лидерборд")
 def show_leaderboard_button(message):
     leaderboard = get_leaderboard()
-    text = "🏆 Топ-10 игроков:\n\n"
-    for i, (username, score) in enumerate(leaderboard, 1):
-        text += f"{i}. @{username or 'Неизвестный'} — {score}\n"
+    text = "🏆 Топ-10 игроков по sun:\n\n"
+    for i, (username, sun) in enumerate(leaderboard, 1):
+        text += f"{i}. @{username or 'Неизвестный'} — {sun} ☀️\n"
     bot.send_message(message.chat.id, text)
 
 @bot.message_handler(func=lambda message: message.text == "👥 Рефералка")
@@ -273,10 +282,22 @@ def show_referral_button(message):
     user_data = get_user_data(user_id)
     refs_count = user_data.get('referral_count', 0)
     
+    # Получаем сумму всех реферальных бонусов
+    conn = sqlite3.connect('snake_game.db')
+    c = conn.cursor()
+    c.execute('''
+        SELECT SUM(amount) FROM transactions 
+        WHERE user_id = ? AND (type = 'referral_bonus' OR type = 'referral_farm_bonus')
+    ''', (user_id,))
+    total_ref_earnings = c.fetchone()[0] or 0
+    conn.close()
+    
     text = (
         f"👥 Реферальная система\n\n"
         f"🔗 Ваша ссылка:\n{link}\n\n"
-        f"📊 Ваши рефералы: {refs_count}\n\n"
+        f"📊 Статистика:\n"
+        f"• Рефералов: {refs_count}\n"
+        f"• Заработано с рефералов: {total_ref_earnings} ☀️\n\n"
         f"💰 Награды:\n"
         f"• +20 ☀️ за приглашение реферала\n"
         f"• +10% от фарма рефералов\n"
@@ -309,7 +330,6 @@ def help_button(message):
 @bot.message_handler(commands=['give_premium'])
 def give_premium(message):
     if message.from_user.id != ADMIN_ID:
-        bot.send_message(message.chat.id, "❌ У вас нет прав для выполнения этой команды")
         return
     
     try:
@@ -356,7 +376,6 @@ def give_premium(message):
 @bot.message_handler(commands=['remove_premium'])
 def remove_premium(message):
     if message.from_user.id != ADMIN_ID:
-        bot.send_message(message.chat.id, "❌ У вас нет прав для выполнения этой команды")
         return
     
     try:
@@ -547,6 +566,7 @@ def web_app_data(message):
                 referral_bonus = int(earned_sun * 0.1)  # 10% от заработка
                 referrer_data['sun'] = referrer_data.get('sun', 0) + referral_bonus
                 update_user_data(user_data['referrer_id'], referrer_data)
+                log_transaction(user_data['referrer_id'], 'referral_farm_bonus', referral_bonus)
                 try:
                     bot.send_message(
                         user_data['referrer_id'],
