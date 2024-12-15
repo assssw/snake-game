@@ -133,6 +133,7 @@ def update_user_data(user_id, data):
                   data.get('registration_date', datetime.now().isoformat()),
                   data.get('referrer_id'), data.get('referral_count', 0)))
         conn.commit()
+        logger.info(f"Updated data for user {user_id}: {data}")
     except Exception as e:
         logger.error(f"Error updating user data: {e}")
         conn.rollback()
@@ -156,8 +157,11 @@ def log_transaction(user_id, type, amount):
 def get_leaderboard():
     conn = sqlite3.connect('snake_game.db')
     c = conn.cursor()
-    c.execute('''SELECT username, sun FROM users 
-                 ORDER BY sun DESC LIMIT 10''')
+    c.execute('''SELECT username, sun, best_score 
+                 FROM users 
+                 WHERE username IS NOT NULL 
+                 ORDER BY sun DESC 
+                 LIMIT 10''')
     data = c.fetchall()
     conn.close()
     return data
@@ -184,6 +188,13 @@ def start(message):
     user_id = str(message.from_user.id)
     username = message.from_user.username
     
+    if not username:
+        bot.send_message(
+            message.chat.id,
+            "❌ Для игры необходимо установить username в настройках Telegram"
+        )
+        return
+    
     # Проверяем реферальный код
     args = message.text.split()
     referrer_id = args[1] if len(args) > 1 else None
@@ -199,7 +210,8 @@ def start(message):
             'has_sun_skin': False,
             'has_premium_skin': False,
             'referrer_id': referrer_id,
-            'referral_count': 0
+            'referral_count': 0,
+            'registration_date': datetime.now().isoformat()
         }
         update_user_data(user_id, user_data)
         
@@ -219,7 +231,7 @@ def start(message):
                 # Уведомления
                 bot.send_message(
                     referrer_id, 
-                    f"🎉 Новый реферал! Получено:\n"
+                    f"🎉 Новый реферал @{username}! Получено:\n"
                     f"• +20 ☀️ за приглашение\n"
                     f"• 10% от фарма реферала"
                 )
@@ -259,6 +271,13 @@ def start(message):
 
 @bot.message_handler(func=lambda message: message.text == "🎮 Играть")
 def play_button(message):
+    if not message.from_user.username:
+        bot.send_message(
+            message.chat.id,
+            "❌ Для игры необходимо установить username в настройках Telegram"
+        )
+        return
+        
     bot.send_message(
         message.chat.id,
         "🎮 Нажмите кнопку ниже, чтобы начать игру:",
@@ -267,14 +286,36 @@ def play_button(message):
 
 @bot.message_handler(func=lambda message: message.text == "🏆 Лидерборд")
 def show_leaderboard_button(message):
-    leaderboard = get_leaderboard()
-    text = "🏆 Топ-10 игроков по sun:\n\n"
-    for i, (username, sun) in enumerate(leaderboard, 1):
-        text += f"{i}. @{username or 'Неизвестный'} — {sun} ☀️\n"
-    bot.send_message(message.chat.id, text)
+    try:
+        leaderboard = get_leaderboard()
+        
+        if not leaderboard:
+            bot.send_message(message.chat.id, "🏆 Пока нет игроков в топе")
+            return
+            
+        text = "🏆 Топ-10 игроков:\n\n"
+        for i, (username, sun, best_score) in enumerate(leaderboard, 1):
+            medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else "👑"
+            text += f"{medal} {i}. @{username}\n└ {sun} ☀️ | Рекорд: {best_score}\n\n"
+        
+        bot.send_message(message.chat.id, text)
+        
+    except Exception as e:
+        logger.error(f"Error showing leaderboard: {e}")
+        bot.send_message(
+            message.chat.id,
+            "❌ Произошла ошибка при загрузке лидерборда"
+        )
 
 @bot.message_handler(func=lambda message: message.text == "👥 Рефералка")
 def show_referral_button(message):
+    if not message.from_user.username:
+        bot.send_message(
+            message.chat.id,
+            "❌ Для использования реферальной системы необходимо установить username"
+        )
+        return
+        
     bot_username = bot.get_me().username
     user_id = str(message.from_user.id)
     link = f"https://t.me/{bot_username}?start={user_id}"
@@ -358,19 +399,21 @@ def give_premium(message):
                 "• +50% к фарму sun\n"
                 "• Уменьшенный таймер между играми"
             )
+            bot.send_message(
+                message.chat.id,
+                f"✅ Premium успешно выдан пользователю @{username}"
+            )
         except Exception as e:
-            logger.error(f"Could not send message to user {user_data['user_id']}: {e}")
-        
-        bot.send_message(
-            message.chat.id,
-            f"✅ Premium успешно выдан пользователю @{username}"
-        )
-        
+            bot.send_message(
+                message.chat.id,
+                f"⚠️ Premium выдан, но не удалось отправить уведомление пользователю: {e}"
+            )
+            
     except Exception as e:
         logger.error(f"Error giving premium: {e}")
         bot.send_message(
             message.chat.id,
-            "❌ Произошла ошибка при выдаче Premium"
+            f"❌ Произошла ошибка при выдаче Premium: {e}"
         )
 
 @bot.message_handler(commands=['remove_premium'])
@@ -400,19 +443,21 @@ def remove_premium(message):
                 int(user_data['user_id']),
                 "❌ Ваш Premium скин был деактивирован"
             )
+            bot.send_message(
+                message.chat.id,
+                f"✅ Premium успешно удален у пользователя @{username}"
+            )
         except Exception as e:
-            logger.error(f"Could not send message to user {user_data['user_id']}: {e}")
-        
-        bot.send_message(
-            message.chat.id,
-            f"✅ Premium успешно удален у пользователя @{username}"
-        )
-        
+            bot.send_message(
+                message.chat.id,
+                f"⚠️ Premium удален, но не удалось отправить уведомление пользователю: {e}"
+            )
+            
     except Exception as e:
         logger.error(f"Error removing premium: {e}")
         bot.send_message(
             message.chat.id,
-            "❌ Произошла ошибка при удалении Premium"
+            f"❌ Произошла ошибка при удалении Premium: {e}"
         )
 
 @bot.message_handler(commands=['give_sun'])
@@ -543,7 +588,25 @@ def clear_database(message):
     if message.from_user.id != ADMIN_ID:
         return
     try:
-        init_db()  # Пересоздаем базу данных
+        # Сначала уведомляем всех пользователей
+        conn = sqlite3.connect('snake_game.db')
+        c = conn.cursor()
+        c.execute('SELECT user_id FROM users')
+        users = c.fetchall()
+        conn.close()
+        
+        for user in users:
+            try:
+                bot.send_message(
+                    user[0],
+                    "🔄 База данных очищена. Перезапустите игру.",
+                    reply_markup=get_webapp_keyboard()
+                )
+            except:
+                continue
+        
+        # Затем очищаем базу
+        init_db()
         bot.send_message(message.chat.id, "✅ База данных очищена")
     except Exception as e:
         bot.send_message(message.chat.id, f"❌ Ошибка: {e}")
@@ -621,4 +684,3 @@ if __name__ == '__main__':
     
     # Запускаем бота
     logger.info("Bot started")
-    bot.infinity_polling()
