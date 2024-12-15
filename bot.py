@@ -109,7 +109,7 @@ def get_webapp_keyboard():
     keyboard = InlineKeyboardMarkup()
     keyboard.add(InlineKeyboardButton(
         text="🎮 Играть",
-        web_app=WebAppInfo(url="YOUR_WEBAPP_URL")
+        web_app=WebAppInfo(url="https://assssw.github.io/snake-game/")
     ))
     return keyboard
 
