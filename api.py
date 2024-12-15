@@ -5,15 +5,14 @@ import os
 from datetime import datetime
 
 app = Flask(__name__)
+CORS(app)  # Простой CORS для всех запросов
 
-# Простые настройки CORS
-CORS(app, resources={
-    r"/*": {
-        "origins": "*",
-        "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"]
-    }
-})
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+    response.headers.add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+    return response
 
 def get_db():
     try:

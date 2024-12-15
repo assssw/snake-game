@@ -92,24 +92,16 @@
         window.addEventListener('DOMContentLoaded', async () => {
             console.log('Testing API connection...');
             try {
-                const response = await fetch('http://127.0.0.1:5000/api/test', {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    mode: 'cors'
-                });
+                const response = await fetch('http://localhost:5000/api/test');
                 const data = await response.json();
                 console.log('API test response:', data);
                 if (data.status === 'ok') {
                     console.log('API connection successful');
                 } else {
                     console.error('API test failed');
-                    alert('Ошибка подключения к серверу');
                 }
             } catch (e) {
                 console.error('API error:', e);
-                alert('Ошибка подключения к серверу');
             }
         });
     </script>

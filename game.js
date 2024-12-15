@@ -3,12 +3,11 @@ const tg = window.Telegram.WebApp;
 tg.expand();
 
 // API URL
-const API_URL = 'http://127.0.0.1:5000';
+const API_URL = 'http://localhost:5000';
 
 // Добавляем заголовки для запросов
 const headers = {
-    'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*'
+    'Content-Type': 'application/json'
 };
 
 console.log('Game initialization started');
@@ -24,8 +23,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     try {
         const response = await fetch(`${API_URL}/api/test`, {
             method: 'GET',
-            headers: headers,
-            mode: 'cors'
+            headers: headers
         });
         const data = await response.json();
         console.log('API test response:', data);
@@ -40,8 +38,6 @@ window.addEventListener('DOMContentLoaded', async () => {
         alert('Ошибка подключения к серверу');
     }
 });
-
-// ... остальной код game.js остается без изменений ...
 
 // Игровые переменные
 let canvas = document.getElementById('gameCanvas');
@@ -80,7 +76,10 @@ let subscriptionCheckAttempts = 0;
 async function checkApiConnection() {
     try {
         console.log('Checking API connection...');
-        const response = await fetch(`${API_URL}/api/test`);
+        const response = await fetch(`${API_URL}/api/test`, {
+            method: 'GET',
+            headers: headers
+        });
         console.log('API test response:', response);
         
         if (response.ok) {
@@ -95,6 +94,88 @@ async function checkApiConnection() {
         return false;
     }
 }
+
+async function loadUserData() {
+    try {
+        const userId = tg.initDataUnsafe?.user?.id;
+        console.log('Loading data for user:', userId);
+        
+        if (!userId) {
+            console.error('User ID not found');
+            return;
+        }
+        
+        const response = await fetch(`${API_URL}/api/user/${userId}`, {
+            method: 'GET',
+            headers: headers
+        });
+        const data = await response.json();
+        
+        console.log('Loaded user data:', data);
+        
+        if (data.error) {
+            console.error('Error loading user data:', data.error);
+            return;
+        }
+        
+        sun = data.sun;
+        hasSunSkin = data.has_sun_skin;
+        hasPremiumSkin = data.has_premium_skin;
+        updateScore();
+        
+    } catch (e) {
+        console.error('Error loading user data:', e);
+    }
+}
+
+async function updateGameData(score, earnedSun) {
+    try {
+        const userId = tg.initDataUnsafe?.user?.id;
+        if (!userId) {
+            console.error('User ID not found');
+            return;
+        }
+        
+        console.log('Sending game data:', {
+            user_id: userId,
+            score: score,
+            earned_sun: earnedSun
+        });
+        
+        const response = await fetch(`${API_URL}/api/update_game`, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify({
+                user_id: userId,
+                score: score,
+                earned_sun: earnedSun
+            })
+        });
+        
+        const data = await response.json();
+        console.log('Server response:', data);
+        
+        if (data.error) {
+            console.error('Error updating game data:', data.error);
+            return;
+        }
+        
+        sun = data.new_sun;
+        updateScore();
+        
+        // Отправляем данные в Telegram WebApp
+        tg.sendData(JSON.stringify({
+            sun: sun,
+            score: score,
+            gameOver: true
+        }));
+        
+    } catch (e) {
+        console.error('Error updating game data:', e);
+    }
+}
+
+// ... остальной код game.js остается без изменений ...
 
 async function loadUserData() {
     try {
