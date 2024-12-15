@@ -22,8 +22,8 @@ logger = logging.getLogger(__name__)
 
 # Инициализация бота
 TOKEN = '8028147928:AAHC2PSGPmrYYRn7vSQ5sXnw4QNrbX69ZU8'
-ADMIN_ID = 1454515378 # Замените на ваш ID
-CHANNEL_ID = '@mariartytt'  # ID канала для проверки подписки
+ADMIN_ID = 1454515378
+CHANNEL_ID = '@mariartytt'
 bot = telebot.TeleBot(TOKEN)
 
 # Инициализация базы данных
@@ -38,7 +38,9 @@ def init_db():
                   has_sun_skin BOOLEAN DEFAULT 0,
                   has_premium_skin BOOLEAN DEFAULT 0,
                   last_game TEXT,
-                  registration_date TEXT)''')
+                  registration_date TEXT,
+                  referrer_id TEXT,
+                  referral_count INTEGER DEFAULT 0)''')
     
     c.execute('''CREATE TABLE IF NOT EXISTS transactions
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -53,7 +55,26 @@ def init_db():
 
 init_db()
 
-# Функции для работы с базой данных
+def get_user_by_username(username):
+    conn = sqlite3.connect('snake_game.db')
+    c = conn.cursor()
+    username = username.replace('@', '')
+    c.execute('SELECT * FROM users WHERE username = ?', (username,))
+    data = c.fetchone()
+    conn.close()
+    if data:
+        return {
+            'user_id': data[0],
+            'username': data[1],
+            'best_score': data[2],
+            'sun': data[3],
+            'has_sun_skin': bool(data[4]),
+            'has_premium_skin': bool(data[5]),
+            'last_game': data[6],
+            'registration_date': data[7]
+        }
+    return None
+
 def get_user_data(user_id):
     conn = sqlite3.connect('snake_game.db')
     c = conn.cursor()
@@ -78,11 +99,13 @@ def update_user_data(user_id, data):
     c = conn.cursor()
     try:
         c.execute('''INSERT OR REPLACE INTO users 
-                     (user_id, username, best_score, sun, has_sun_skin, has_premium_skin, last_game)
-                     VALUES (?, ?, ?, ?, ?, ?, ?)''',
+                     (user_id, username, best_score, sun, has_sun_skin, has_premium_skin, last_game, registration_date, referrer_id, referral_count)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                  (str(user_id), data.get('username'), data.get('best_score', 0),
                   data.get('sun', 0), data.get('has_sun_skin', False),
-                  data.get('has_premium_skin', False), datetime.now().isoformat()))
+                  data.get('has_premium_skin', False), datetime.now().isoformat(),
+                  data.get('registration_date', datetime.now().isoformat()),
+                  data.get('referrer_id'), data.get('referral_count', 0)))
         conn.commit()
     except Exception as e:
         logger.error(f"Error updating user data: {e}")
@@ -104,6 +127,15 @@ def log_transaction(user_id, type, amount):
     finally:
         conn.close()
 
+def get_leaderboard():
+    conn = sqlite3.connect('snake_game.db')
+    c = conn.cursor()
+    c.execute('''SELECT username, best_score FROM users 
+                 ORDER BY best_score DESC LIMIT 10''')
+    data = c.fetchall()
+    conn.close()
+    return data
+
 # Клавиатуры
 def get_webapp_keyboard():
     keyboard = InlineKeyboardMarkup()
@@ -115,9 +147,9 @@ def get_webapp_keyboard():
 
 def get_main_keyboard():
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add(KeyboardButton("🎮 Играть"))
-    keyboard.add(KeyboardButton("📊 Статистика"), KeyboardButton("💰 Баланс"))
-    keyboard.add(KeyboardButton("ℹ️ Помощь"))
+    keyboard.row(KeyboardButton("🎮 Играть"))
+    keyboard.row(KeyboardButton("🏆 Лидерборд"), KeyboardButton("👥 Рефералка"))
+    keyboard.row(KeyboardButton("ℹ️ Помощь"))
     return keyboard
 
 # Обработчики команд
@@ -126,50 +158,103 @@ def start(message):
     user_id = str(message.from_user.id)
     username = message.from_user.username
     
+    # Проверяем реферальный код
+    args = message.text.split()
+    referrer_id = args[1] if len(args) > 1 else None
+    
     # Регистрация нового пользователя
     if not get_user_data(user_id):
+        initial_sun = 20 if referrer_id else 0
         update_user_data(user_id, {
             'username': username,
             'best_score': 0,
-            'sun': 0,
+            'sun': initial_sun,
             'has_sun_skin': False,
-            'has_premium_skin': False
+            'has_premium_skin': False,
+            'referrer_id': referrer_id
         })
+        
+        # Награждаем реферера
+        if referrer_id:
+            referrer_data = get_user_data(referrer_id)
+            if referrer_data:
+                referrer_data['sun'] += 20
+                referrer_data['referral_count'] = referrer_data.get('referral_count', 0) + 1
+                update_user_data(referrer_id, referrer_data)
+                
+                bot.send_message(
+                    referrer_id, 
+                    f"🎉 Новый реферал! Получено:\n"
+                    f"• +20 ☀️ за приглашение\n"
+                    f"• 10% от фарма реферала"
+                )
+                
+                bot.send_message(
+                    message.chat.id, 
+                    f"🎁 Добро пожаловать!\n\n"
+                    f"Вы получаете:\n"
+                    f"• +20 ☀️ за регистрацию по реферальной ссылке"
+                )
+        else:
+            bot.send_message(
+                message.chat.id, 
+                f"🎁 Добро пожаловать в игру!"
+            )
+        
         logger.info(f"New user registered: {user_id} (@{username})")
     
+    # Отправляем приветственное сообщение
     bot.send_message(
         message.chat.id,
         "🐍 Добро пожаловать в Star Snake!\n\n"
         "🎮 Управляйте змейкой, собирайте яблоки и зарабатывайте sun!\n"
         "💫 Покупайте скины и улучшения в магазине\n"
-        "🏆 Соревнуйтесь за место в топе игроков\n\n"
+        "🏆 Соревнуйтесь за место в топе игроков\n"
+        "👥 Приглашайте друзей и получайте награды\n\n"
         "Нажмите кнопку ниже, чтобы начать игру:",
         reply_markup=get_webapp_keyboard()
     )
-
-@bot.message_handler(commands=['stats'])
-def stats(message):
-    user_id = str(message.from_user.id)
-    data = get_user_data(user_id)
     
-    if data:
-        stats_text = (
-            f"📊 Ваша статистика:\n\n"
-            f"🏆 Рекорд: {data['best_score']}\n"
-            f"☀️ Sun: {data['sun']}\n"
-            f"🎨 Sun скин: {'✅' if data['has_sun_skin'] else '❌'}\n"
-            f"✨ Premium: {'✅' if data['has_premium_skin'] else '❌'}\n\n"
-            f"📅 Дата регистрации: {data['registration_date'][:10]}"
-        )
-        
-        bot.send_message(message.chat.id, stats_text)
-    else:
-        bot.send_message(
-            message.chat.id,
-            "❌ У вас пока нет статистики. Сыграйте в игру!"
-        )
+    # Отправляем основную клавиатуру
+    bot.send_message(
+        message.chat.id,
+        "Выберите действие:",
+        reply_markup=get_main_keyboard()
+    )
 
-@bot.message_handler(commands=['premium'])
+@bot.message_handler(func=lambda message: message.text == "🏆 Лидерборд")
+def show_leaderboard_button(message):
+    leaderboard = get_leaderboard()
+    text = "🏆 Топ-10 игроков:\n\n"
+    for i, (username, score) in enumerate(leaderboard, 1):
+        text += f"{i}. @{username or 'Неизвестный'} — {score}\n"
+    bot.send_message(message.chat.id, text)
+
+@bot.message_handler(func=lambda message: message.text == "👥 Рефералка")
+def show_referral_button(message):
+    bot_username = bot.get_me().username
+    user_id = str(message.from_user.id)
+    link = f"https://t.me/{bot_username}?start={user_id}"
+    
+    user_data = get_user_data(user_id)
+    refs_count = user_data.get('referral_count', 0)
+    
+    text = (
+        f"👥 Реферальная система\n\n"
+        f"🔗 Ваша ссылка:\n{link}\n\n"
+        f"📊 Ваши рефералы: {refs_count}\n\n"
+        f"💰 Награды:\n"
+        f"• +20 ☀️ за приглашение реферала\n"
+        f"• +10% от фарма рефералов\n"
+        f"• Реферал получает +20 ☀️\n\n"
+        f"ℹ️ Отправьте эту ссылку друзьям и\n"
+        f"получайте награды за их игру!"
+    )
+    
+    bot.send_message(message.chat.id, text)
+
+# Админ команды
+@bot.message_handler(commands=['give_premium'])
 def give_premium(message):
     if message.from_user.id != ADMIN_ID:
         bot.send_message(message.chat.id, "❌ У вас нет прав для выполнения этой команды")
@@ -178,36 +263,35 @@ def give_premium(message):
     try:
         args = message.text.split()
         if len(args) != 2:
-            bot.send_message(message.chat.id, "❌ Использование: /premium USER_ID")
+            bot.send_message(message.chat.id, "❌ Использование: /give_premium USERNAME")
             return
         
-        target_user_id = args[1]
-        user_data = get_user_data(target_user_id)
+        username = args[1].replace('@', '')
+        user_data = get_user_by_username(username)
         
         if not user_data:
-            bot.send_message(message.chat.id, "❌ Пользователь не найден")
+            bot.send_message(message.chat.id, f"❌ Пользователь @{username} не найден")
             return
         
         user_data['has_premium_skin'] = True
-        update_user_data(target_user_id, user_data)
-        log_transaction(target_user_id, 'premium_given', 0)
+        update_user_data(user_data['user_id'], user_data)
+        log_transaction(user_data['user_id'], 'premium_given', 0)
         
-        # Уведомляем пользователя
         try:
             bot.send_message(
-                int(target_user_id),
+                int(user_data['user_id']),
                 "✨ Поздравляем! Вам выдан Premium скин!\n\n"
                 "Особенности Premium:\n"
                 "• Уникальный градиентный скин\n"
                 "• +50% к фарму sun\n"
                 "• Уменьшенный таймер между играми"
             )
-        except:
-            logger.error(f"Could not send message to user {target_user_id}")
+        except Exception as e:
+            logger.error(f"Could not send message to user {user_data['user_id']}: {e}")
         
         bot.send_message(
             message.chat.id,
-            f"✅ Premium успешно выдан пользователю {target_user_id}"
+            f"✅ Premium успешно выдан пользователю @{username}"
         )
         
     except Exception as e:
@@ -217,6 +301,187 @@ def give_premium(message):
             "❌ Произошла ошибка при выдаче Premium"
         )
 
+@bot.message_handler(commands=['remove_premium'])
+def remove_premium(message):
+    if message.from_user.id != ADMIN_ID:
+        bot.send_message(message.chat.id, "❌ У вас нет прав для выполнения этой команды")
+        return
+    
+    try:
+        args = message.text.split()
+        if len(args) != 2:
+            bot.send_message(message.chat.id, "❌ Использование: /remove_premium USERNAME")
+            return
+        
+        username = args[1].replace('@', '')
+        user_data = get_user_by_username(username)
+        
+        if not user_data:
+            bot.send_message(message.chat.id, f"❌ Пользователь @{username} не найден")
+            return
+        
+        user_data['has_premium_skin'] = False
+        update_user_data(user_data['user_id'], user_data)
+        log_transaction(user_data['user_id'], 'premium_removed', 0)
+        
+        try:
+            bot.send_message(
+                int(user_data['user_id']),
+                "❌ Ваш Premium скин был деактивирован"
+            )
+        except Exception as e:
+            logger.error(f"Could not send message to user {user_data['user_id']}: {e}")
+        
+        bot.send_message(
+            message.chat.id,
+            f"✅ Premium успешно удален у пользователя @{username}"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error removing premium: {e}")
+        bot.send_message(
+            message.chat.id,
+            "❌ Произошла ошибка при удалении Premium"
+        )
+
+@bot.message_handler(commands=['give_sun'])
+def give_sun(message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    try:
+        args = message.text.split()
+        if len(args) != 3:
+            bot.send_message(message.chat.id, "❌ Использование: /give_sun USERNAME AMOUNT")
+            return
+            
+        username = args[1].replace('@', '')
+        amount = int(args[2])
+        
+        user_data = get_user_by_username(username)
+        if user_data:
+            user_data['sun'] = user_data.get('sun', 0) + amount
+            update_user_data(user_data['user_id'], user_data)
+            log_transaction(user_data['user_id'], 'admin_give_sun', amount)
+            
+            bot.send_message(message.chat.id, f"✅ Выдано {amount} ☀️ пользователю @{username}")
+            bot.send_message(int(user_data['user_id']), f"🎁 Администратор выдал вам {amount} ☀️!")
+        else:
+            bot.send_message(message.chat.id, "❌ Пользователь не найден")
+    except:
+        bot.send_message(message.chat.id, "❌ Использование: /give_sun USERNAME AMOUNT")
+
+@bot.message_handler(commands=['user_info'])
+def user_info(message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    try:
+        username = message.text.split()[1].replace('@', '')
+        user_data = get_user_by_username(username)
+        
+        if user_data:
+            text = (
+                f"👤 Информация о пользователе:\n\n"
+                f"ID: {user_data['user_id']}\n"
+                f"Username: @{user_data['username']}\n"
+                f"Рекорд: {user_data['best_score']}\n"
+                f"Sun: {user_data['sun']}\n"
+                f"Sun скин: {'✅' if user_data['has_sun_skin'] else '❌'}\n"
+                f"Premium: {'✅' if user_data['has_premium_skin'] else '❌'}\n"
+                f"Последняя игра: {user_data['last_game']}\n"
+                f"Дата регистрации: {user_data['registration_date']}\n"
+                f"Рефералов: {user_data.get('referral_count', 0)}"
+            )
+            bot.send_message(message.chat.id, text)
+        else:
+            bot.send_message(message.chat.id, "❌ Пользователь не найден")
+    except:
+        bot.send_message(message.chat.id, "❌ Использование: /user_info USERNAME")
+
+@bot.message_handler(commands=['stats'])
+def admin_stats(message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    try:
+        conn = sqlite3.connect('snake_game.db')
+        c = conn.cursor()
+        
+        c.execute('SELECT COUNT(*) FROM users')
+        total_users = c.fetchone()[0]
+        
+        yesterday = (datetime.now() - timedelta(days=1)).isoformat()
+        c.execute('SELECT COUNT(*) FROM users WHERE last_game > ?', (yesterday,))
+        active_users = c.fetchone()[0]
+        
+        c.execute('SELECT SUM(sun) FROM users')
+        total_sun = c.fetchone()[0] or 0
+        
+        c.execute('SELECT COUNT(*) FROM users WHERE has_premium_skin = 1')
+        premium_users = c.fetchone()[0]
+        
+        conn.close()
+        
+        text = (
+            f"📊 Статистика бота:\n\n"
+            f"👥 Всего пользователей: {total_users}\n"
+            f"📱 Активных за 24ч: {active_users}\n"
+            f"☀️ Всего sun: {total_sun}\n"
+            f"✨ Premium пользователей: {premium_users}"
+        )
+        
+        bot.send_message(message.chat.id, text)
+    except Exception as e:
+        bot.send_message(message.chat.id, f"❌ Ошибка: {e}")
+
+@bot.message_handler(commands=['broadcast'])
+def broadcast(message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    try:
+        text = message.text.split(maxsplit=1)[1]
+        
+        conn = sqlite3.connect('snake_game.db')
+        c = conn.cursor()
+        c.execute('SELECT user_id FROM users')
+        users = c.fetchall()
+        conn.close()
+        
+        success = 0
+        failed = 0
+        
+        for user in users:
+            try:
+                bot.send_message(user[0], text)
+                success += 1
+            except:
+                failed += 1
+        
+        bot.send_message(
+            message.chat.id,
+            f"✅ Рассылка завершена\n"
+            f"Успешно: {success}\n"
+            f"Ошибок: {failed}"
+        )
+    except:
+        bot.send_message(
+            message.chat.id,
+            "❌ Использование: /broadcast ТЕКСТ"
+        )
+
+@bot.message_handler(commands=['clear_db'])
+def clear_database(message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    try:
+        conn = sqlite3.connect('snake_game.db')
+        c = conn.cursor()
+        c.execute('DELETE FROM users')
+        c.execute('DELETE FROM transactions')
+        conn.commit()
+        conn.close()
+        bot.send_message(message.chat.id, "✅ База данных очищена")
+    except Exception as e:
+        bot.send_message(message.chat.id, f"❌ Ошибка: {e}")
+
 # Обработчик данных от веб-приложения
 @bot.message_handler(content_types=['web_app_data'])
 def web_app_data(message):
@@ -225,7 +490,26 @@ def web_app_data(message):
         user_id = str(message.from_user.id)
         user_data = get_user_data(user_id) or {}
         
-        # Обновляем данные
+        # Получаем данные о заработанном sun
+        earned_sun = data.get('sun', 0) - user_data.get('sun', 0)
+        
+        # Если есть реферер, начисляем ему 10%
+        if user_data.get('referrer_id'):
+            referrer_data = get_user_data(user_data['referrer_id'])
+            if referrer_data and earned_sun > 0:
+                referral_bonus = int(earned_sun * 0.1)  # 10% от заработка
+                referrer_data['sun'] += referral_bonus
+                update_user_data(user_data['referrer_id'], referrer_data)
+                try:
+                    bot.send_message(
+                        user_data['referrer_id'],
+                        f"💰 Ваш реферал заработал {earned_sun} ☀️\n"
+                        f"Ваш бонус: +{referral_bonus} ☀️"
+                    )
+                except:
+                    logger.error(f"Could not send referral bonus message to {user_data['referrer_id']}")
+        
+        # Обновляем данные пользователя
         user_data['best_score'] = max(user_data.get('best_score', 0), data.get('bestScore', 0))
         user_data['sun'] = data.get('sun', user_data.get('sun', 0))
         user_data['has_sun_skin'] = data.get('hasSunSkin', user_data.get('has_sun_skin', False))
@@ -234,29 +518,16 @@ def web_app_data(message):
         
         update_user_data(user_id, user_data)
         
-        # Проверяем новый рекорд
-        if data.get('bestScore', 0) > user_data.get('best_score', 0):
-            bot.send_message(
-                message.chat.id,
-                f"🏆 Новый рекорд: {data['bestScore']}!"
-            )
-        
         # Отправляем статистику игры
         bot.send_message(
             message.chat.id,
             f"🎮 Игра завершена!\n\n"
             f"📊 Статистика:\n"
             f"🏆 Счёт: {data.get('score', 0)}\n"
-            f"☀️ Заработано: {data.get('sun', 0) - user_data.get('sun', 0)}\n"
+            f"☀️ Заработано: {earned_sun}\n"
             f"💰 Всего sun: {data.get('sun', 0)}"
         )
         
-    except json.JSONDecodeError:
-        logger.error("Invalid JSON data received")
-        bot.send_message(
-            message.chat.id,
-            "❌ Ошибка при обработке данных игры"
-        )
     except Exception as e:
         logger.error(f"Error processing web app data: {e}\n{traceback.format_exc()}")
         bot.send_message(
@@ -264,24 +535,15 @@ def web_app_data(message):
             "❌ Произошла ошибка при сохранении прогресса"
         )
 
-# Проверка подписки на канал
-def check_subscription(user_id):
-    try:
-        member = bot.get_chat_member(CHANNEL_ID, user_id)
-        return member.status in ['member', 'administrator', 'creator']
-    except:
-        return False
-
-# Периодическое сохранение данных
+# Функция резервного копирования для Windows
 def backup_data():
     while True:
         try:
-            # Создаем резервную копию базы данных
-            os.system('cp snake_game.db snake_game_backup.db')
+            os.system('copy snake_game.db snake_game_backup.db')
             logger.info("Database backup created")
         except Exception as e:
             logger.error(f"Backup error: {e}")
-        time.sleep(3600)  # Каждый час
+        time.sleep(3600)
 
 # Запуск бота
 if __name__ == '__main__':
