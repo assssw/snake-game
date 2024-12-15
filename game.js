@@ -2,6 +2,9 @@
 const tg = window.Telegram.WebApp;
 tg.expand();
 
+// API URL
+const API_URL = 'http://localhost:5000';
+
 // Фиксим дергание экрана
 document.body.style.overflow = 'hidden';
 document.documentElement.style.overflow = 'hidden';
@@ -38,6 +41,101 @@ let speedTimer = null; // Таймер для увеличения скорос�
 let activeSkin = 'default';
 let hasVisitedChannel = false;
 let subscriptionCheckAttempts = 0;
+
+// Функции для работы с API
+async function checkApiConnection() {
+    try {
+        const response = await fetch(`${API_URL}/api/test`);
+        if (response.ok) {
+            console.log('API connection successful');
+            return true;
+        }
+        console.error('API connection failed');
+        return false;
+    } catch (e) {
+        console.error('API connection error:', e);
+        return false;
+    }
+}
+
+async function loadUserData() {
+    try {
+        const userId = tg.initDataUnsafe?.user?.id;
+        if (!userId) {
+            console.error('User ID not found');
+            return;
+        }
+        
+        const response = await fetch(`${API_URL}/api/user/${userId}`);
+        const data = await response.json();
+        
+        if (data.error) {
+            console.error('Error loading user data:', data.error);
+            return;
+        }
+        
+        // Обновляем локальные данные
+        sun = data.sun;
+        hasSunSkin = data.has_sun_skin;
+        hasPremiumSkin = data.has_premium_skin;
+        updateScore();
+        
+        console.log('User data loaded:', data);
+    } catch (e) {
+        console.error('Error loading user data:', e);
+    }
+}
+
+async function updateGameData(score, earnedSun) {
+    try {
+        const userId = tg.initDataUnsafe?.user?.id;
+        if (!userId) {
+            console.error('User ID not found');
+            return;
+        }
+        
+        console.log('Sending game data:', {
+            user_id: userId,
+            score: score,
+            earned_sun: earnedSun
+        });
+        
+        const response = await fetch(`${API_URL}/api/update_game`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                user_id: userId,
+                score: score,
+                earned_sun: earnedSun
+            })
+        });
+        
+        const data = await response.json();
+        console.log('Server response:', data);
+        
+        if (data.error) {
+            console.error('Error updating game data:', data.error);
+            return;
+        }
+        
+        // Обновляем локальные данные
+        sun = data.new_sun;
+        updateScore();
+        
+        // Отправляем данные в Telegram WebApp
+        tg.sendData(JSON.stringify({
+            sun: sun,
+            score: score,
+            gameOver: true
+        }));
+        
+    } catch (e) {
+        console.error('Error updating game data:', e);
+    }
+}
+
 // Функции для работы с частицами и анимациями
 function createParticles(x, y, color, count = 5) {
     for (let i = 0; i < count; i++) {
@@ -111,11 +209,16 @@ function resizeCanvas() {
     gridSize = Math.floor(size / tileCount);
 }
 
-window.onload = function() {
+window.onload = async function() {
+    const apiAvailable = await checkApiConnection();
+    if (!apiAvailable) {
+        alert('Ошибка подключения к серверу. Некоторые функции могут быть недоступны.');
+    }
+    
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
     setupEventListeners();
-    loadUserData();
+    await loadUserData();
     updateTimer();
     setInterval(updateTimer, 1000);
     optimizeRendering();
@@ -182,6 +285,7 @@ function showTasks() {
         }, 300);
     }
 }
+
 // Игровые функции
 function tryStartGame() {
     const now = Date.now();
@@ -211,7 +315,6 @@ function startGame() {
         isGameRunning = true;
         lastGameTime = Date.now();
         gameSpeed = 125;
-        saveUserData();
         
         moveTimer = setInterval(updateGame, gameSpeed);
         requestAnimationFrame(gameLoop);
@@ -240,11 +343,13 @@ function updateGame() {
     headX += dx;
     headY += dy;
 
+    // Проверка столкновений со стенами
     if (headX < 0 || headX >= tileCount || headY < 0 || headY >= tileCount) {
         gameOver();
         return;
     }
 
+    // Проверка столкновений с хвостом
     for (let i = 3; i < trail.length; i++) {
         if (trail[i].x === headX && trail[i].y === headY) {
             gameOver();
@@ -257,18 +362,17 @@ function updateGame() {
         trail.shift();
     }
 
+    // Сбор яблока
     if (headX === appleX && headY === appleY) {
         tail++;
         score += 1;
-        let sunBonus = 1;
         
-        // Гарантированные бонусы от скинов
-        if (activeSkin === 'sun') {
-            sunBonus = Math.ceil(sunBonus * 1.1); // +10%
-        }
-        if (activeSkin === 'premium') {
-            sunBonus = Math.ceil(sunBonus * 1.5); // +50%
-        }
+        // Расчет бонуса sun
+        let sunBonus = 1;
+        if (activeSkin === 'sun') sunBonus = 2; // +100% за sun скин
+        if (activeSkin === 'premium') sunBonus = 3; // +200% за premium скин
+        
+        sun += sunBonus;
         
         const canvasRect = canvas.getBoundingClientRect();
         const popupX = canvasRect.left + appleX * gridSize;
@@ -278,18 +382,20 @@ function updateGame() {
         createScorePopup(popupX + 20, popupY, sunBonus, 'sun');
         createParticles(popupX + gridSize/2, popupY + gridSize/2, '#ffd700', 8);
         
-        sun += sunBonus;
         updateScore();
         placeApple();
     }
 }
 
 function render() {
-    ctx.fillStyle = 'black';
+    // Очистка канваса
+    ctx.fillStyle = 'rgba(10, 10, 46, 0.8)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-
+    
+    // Рисуем змейку
     for (let i = 0; i < trail.length; i++) {
         if (i === trail.length - 1) {
+            // Голова змейки
             if (activeSkin === 'premium') {
                 const gradient = ctx.createLinearGradient(
                     trail[i].x * gridSize,
@@ -335,6 +441,7 @@ function render() {
             
             ctx.restore();
         } else {
+            // Тело змейки
             if (activeSkin === 'premium') {
                 const gradient = ctx.createLinearGradient(
                     trail[i].x * gridSize,
@@ -399,8 +506,16 @@ function render() {
     
     ctx.restore();
 }
+
 function gameOver() {
     isGameRunning = false;
+    
+    if (moveTimer) clearInterval(moveTimer);
+    if (speedTimer) clearInterval(speedTimer);
+    if (animationFrame) cancelAnimationFrame(animationFrame);
+    
+    // Отправляем данные на сервер
+    updateGameData(score, sun);
     
     const canvasRect = canvas.getBoundingClientRect();
     const headScreenX = canvasRect.left + headX * gridSize + gridSize/2;
@@ -419,17 +534,9 @@ function gameOver() {
     const stats = document.createElement('div');
     stats.className = 'game-over-stats';
     
-    let recordText = '';
-    if (score > bestScore) {
-        bestScore = score;
-        recordText = `<p style="color: #ffd700; text-shadow: 0 0 10px #ffd700;">🏆 Новый рекорд!</p>`;
-        createParticles(window.innerWidth/2, window.innerHeight/2, '#ffd700', 20);
-    }
-    
     stats.innerHTML = `
-        ${recordText}
         <p>Счет: ${score}</p>
-        <p style="color: #4CAF50;">Заработано: ☀️ ${sun}</p>
+        <p>Заработано: ${sun} ☀️</p>
     `;
     
     const buttons = document.createElement('div');
@@ -482,22 +589,54 @@ function gameOver() {
         createParticles(window.innerWidth/2, 0, '#ff0000', 10);
         createParticles(window.innerWidth/2, window.innerHeight, '#ff0000', 10);
     }, 500);
-    
-    saveUserData();
-    sendDataToBot();
 }
 
-function stopGame() {
-    isGameRunning = false;
-    if (moveTimer) {
-        clearInterval(moveTimer);
+function resetGame() {
+    headX = 10;
+    headY = 10;
+    dx = 0;
+    dy = 0;
+    trail = [
+        {x: 10, y: 10},
+        {x: 9, y: 10},
+        {x: 8, y: 10}
+    ];
+    tail = 3;
+    score = 0;
+    updateScore();
+    placeApple();
+}
+
+function updateScore() {
+    const scoreElement = document.getElementById('score');
+    const sunElement = document.getElementById('sun-display');
+    const sunBalanceElement = document.getElementById('sun-balance');
+    
+    scoreElement.textContent = `Score: ${score}`;
+    sunElement.textContent = `☀️ ${sun}`;
+    if (sunBalanceElement) {
+        sunBalanceElement.textContent = sun;
     }
-    if (speedTimer) {
-        clearInterval(speedTimer);
-    }
-    if (animationFrame) {
-        cancelAnimationFrame(animationFrame);
-    }
+    
+    scoreElement.classList.add('highlight');
+    sunElement.classList.add('highlight');
+    
+    setTimeout(() => {
+        scoreElement.classList.remove('highlight');
+        sunElement.classList.remove('highlight');
+    }, 300);
+}
+
+function placeApple() {
+    do {
+        appleX = Math.floor(Math.random() * tileCount);
+        appleY = Math.floor(Math.random() * tileCount);
+    } while (trail.some(segment => segment.x === appleX && segment.y === appleY));
+
+    const canvasRect = canvas.getBoundingClientRect();
+    const appleScreenX = canvasRect.left + appleX * gridSize + gridSize/2;
+    const appleScreenY = canvasRect.top + appleY * gridSize + gridSize/2;
+    createParticles(appleScreenX, appleScreenY, '#ff0000', 6);
 }
 
 // Обработчики управления
@@ -567,141 +706,8 @@ function setupEventListeners() {
     canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
     canvas.addEventListener('touchend', handleTouchEnd);
 }
-// Вспомогательные функции
-function resetGame() {
-    headX = 10;
-    headY = 10;
-    dx = 0;
-    dy = 0;
-    trail = [
-        {x: 10, y: 10},
-        {x: 9, y: 10},
-        {x: 8, y: 10}
-    ];
-    tail = 3;
-    score = 0;
-    updateScore();
-    placeApple();
-}
 
-function updateScore() {
-    const scoreElement = document.getElementById('score');
-    const sunElement = document.getElementById('sun-display');
-    const sunBalanceElement = document.getElementById('sun-balance');
-    
-    scoreElement.textContent = `Score: ${score}`;
-    sunElement.textContent = `☀️ ${sun}`;
-    if (sunBalanceElement) {
-        sunBalanceElement.textContent = sun;
-    }
-    
-    scoreElement.classList.add('highlight');
-    sunElement.classList.add('highlight');
-    
-    setTimeout(() => {
-        scoreElement.classList.remove('highlight');
-        sunElement.classList.remove('highlight');
-    }, 300);
-}
-
-function placeApple() {
-    do {
-        appleX = Math.floor(Math.random() * tileCount);
-        appleY = Math.floor(Math.random() * tileCount);
-    } while (trail.some(segment => segment.x === appleX && segment.y === appleY));
-
-    const canvasRect = canvas.getBoundingClientRect();
-    const appleScreenX = canvasRect.left + appleX * gridSize + gridSize/2;
-    const appleScreenY = canvasRect.top + appleY * gridSize + gridSize/2;
-    createParticles(appleScreenX, appleScreenY, '#ff0000', 6);
-}
-
-// Функции для работы с данными
-function loadUserData() {
-    const savedData = localStorage.getItem('starSnakeData');
-    if (savedData) {
-        const data = JSON.parse(savedData);
-        sun = data.sun || 0;
-        hasSunSkin = data.hasSunSkin || false;
-        hasPremiumSkin = data.hasPremiumSkin || false;
-        activeSkin = data.activeSkin || 'default';
-        lastGameTime = data.lastGameTime || 0;
-        hasVisitedChannel = data.hasVisitedChannel || false;
-        subscriptionCheckAttempts = data.subscriptionCheckAttempts || 0;
-        
-        // Обновляем кнопки в магазине
-        if (hasSunSkin) {
-            document.getElementById('sun-skin-button').textContent = 
-                activeSkin === 'sun' ? 'Активен' : 'Выбрать';
-        }
-        if (hasPremiumSkin) {
-            document.getElementById('premium-button').textContent = 
-                activeSkin === 'premium' ? 'Активен' : 'Выбрать';
-        }
-        document.getElementById('default-skin-button').textContent = 
-            activeSkin === 'default' ? 'Активен' : 'Выбрать';
-        
-        // Проверяем, было ли задание выполнено
-        const subscriptionTask = document.getElementById('subscription-task');
-        if (subscriptionTask && data.subscriptionRewardReceived) {
-            subscriptionTask.remove();
-            localStorage.setItem('taskCompleted', 'true');
-        }
-        
-        updateSnakeColor();
-    }
-    document.getElementById('sun-balance').textContent = sun;
-    updateTimer();
-}
-
-function saveUserData() {
-    const data = {
-        sun,
-        hasSunSkin,
-        hasPremiumSkin,
-        activeSkin,
-        lastGameTime,
-        hasVisitedChannel,
-        subscriptionCheckAttempts,
-        subscriptionRewardReceived: document.getElementById('subscription-task')?.style.display === 'none'
-    };
-    localStorage.setItem('starSnakeData', JSON.stringify(data));
-}
-
-function updateTimer() {
-    if (!lastGameTime) return;
-    
-    const now = Date.now();
-    const cooldown = hasPremiumSkin ? 5 * 60 * 1000 : 10 * 60 * 1000;
-    const timePassed = now - lastGameTime;
-    
-    if (timePassed < cooldown) {
-        const timeLeft = cooldown - timePassed;
-        const minutes = Math.floor(timeLeft / 60000);
-        const seconds = Math.floor((timeLeft % 60000) / 1000);
-        document.getElementById('timer').textContent = 
-            `Следующая игра через: ${minutes}:${seconds.toString().padStart(2, '0')}`;
-        document.querySelector('.play-button').disabled = true;
-    } else {
-        document.getElementById('timer').textContent = '';
-        document.querySelector('.play-button').disabled = false;
-    }
-}
-
-// Функции для работы со скинами
-function updateSnakeColor() {
-    switch(activeSkin) {
-        case 'sun':
-            snakeColor = '#ffd700';
-            break;
-        case 'premium':
-            snakeColor = 'gradient';
-            break;
-        default:
-            snakeColor = '#4CAF50';
-    }
-}
-
+// Функции для работы с магазином и заданиями
 function handleSunSkin() {
     if (hasSunSkin) {
         if (activeSkin === 'sun') {
@@ -713,7 +719,7 @@ function handleSunSkin() {
             document.getElementById('sun-skin-button').textContent = 'Активен';
             document.getElementById('default-skin-button').textContent = 'Выбрать';
             document.getElementById('premium-button').textContent = hasPremiumSkin ? 'Выбрать' : 'Купить';
-            alert('Sun скин активирован! (+10% к фарму sun)');
+            alert('Sun скин активирован! (+100% к фарму sun)');
         }
     } else if (sun >= 40) {
         sun -= 40;
@@ -723,12 +729,11 @@ function handleSunSkin() {
         document.getElementById('default-skin-button').textContent = 'Выбрать';
         document.getElementById('premium-button').textContent = hasPremiumSkin ? 'Выбрать' : 'Купить';
         updateScore();
-        alert('Вы приобрели Sun скин! (+10% к фарму sun)');
+        alert('Вы приобрели Sun скин! (+100% к фарму sun)');
     } else {
         alert('Недостаточно sun! Нужно 40 ☀️');
     }
     updateSnakeColor();
-    saveUserData();
 }
 
 function handlePremiumSkin() {
@@ -742,12 +747,11 @@ function handlePremiumSkin() {
             document.getElementById('premium-button').textContent = 'Активен';
             document.getElementById('default-skin-button').textContent = 'Выбрать';
             document.getElementById('sun-skin-button').textContent = hasSunSkin ? 'Выбрать' : '40 ☀️';
-            alert('Premium скин активирован! (+50% к фарму sun)');
+            alert('Premium скин активирован! (+200% к фарму sun)');
         }
         updateSnakeColor();
-        saveUserData();
     } else {
-        buyPremiumSkin();
+        tg.openTelegramLink('https://t.me/Kertiron');
     }
 }
 
@@ -759,21 +763,27 @@ function selectSkin(skinType) {
         document.getElementById('premium-button').textContent = hasPremiumSkin ? 'Выбрать' : 'Купить';
         alert('Базовый скин активирован');
         updateSnakeColor();
-        saveUserData();
     }
 }
 
-function buyPremiumSkin() {
-    tg.openTelegramLink('https://t.me/Kertiron');
+function updateSnakeColor() {
+    switch(activeSkin) {
+        case 'sun':
+            snakeColor = '#ffd700';
+            break;
+        case 'premium':
+            snakeColor = 'gradient';
+            break;
+        default:
+            snakeColor = '#4CAF50';
+    }
 }
 
-// Функции для работы с заданиями
 function handleChannelVisit() {
     try {
         tg.openTelegramLink('https://t.me/mariartytt');
         hasVisitedChannel = true;
         document.getElementById('check-subscription-button').disabled = false;
-        saveUserData();
     } catch (e) {
         console.error('Error opening channel:', e);
     }
@@ -786,7 +796,6 @@ function checkSubscription() {
     }
 
     subscriptionCheckAttempts++;
-    saveUserData();
     
     if (subscriptionCheckAttempts === 1) {
         alert('❌ Подписка не найдена. Попробуйте еще раз через несколько секунд.');
@@ -810,61 +819,26 @@ function checkSubscription() {
             task.remove();
         }, 500);
         
-        const savedData = JSON.parse(localStorage.getItem('starSnakeData') || '{}');
-        savedData.subscriptionRewardReceived = true;
-        localStorage.setItem('starSnakeData', JSON.stringify(savedData));
-        
         alert('✅ Награда получена: +50 ☀️');
-        saveUserData();
-        sendDataToBot();
     }
 }
 
-// Функция отправки данных в бот
-function sendDataToBot(data = null) {
-    try {
-        const dataToSend = data || {
-            score: score,
-            sun: sun,
-            bestScore: bestScore,
-            hasSunSkin: hasSunSkin,
-            hasPremiumSkin: hasPremiumSkin
-        };
-        tg.sendData(JSON.stringify(dataToSend));
-    } catch (e) {
-        console.error('Error sending data to bot:', e);
+function updateTimer() {
+    if (!lastGameTime) return;
+    
+    const now = Date.now();
+    const cooldown = hasPremiumSkin ? 5 * 60 * 1000 : 10 * 60 * 1000;
+    const timePassed = now - lastGameTime;
+    
+    if (timePassed < cooldown) {
+        const timeLeft = cooldown - timePassed;
+        const minutes = Math.floor(timeLeft / 60000);
+        const seconds = Math.floor((timeLeft % 60000) / 1000);
+        document.getElementById('timer').textContent = 
+            `Следующая игра через: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+        document.querySelector('.play-button').disabled = true;
+    } else {
+        document.getElementById('timer').textContent = '';
+        document.querySelector('.play-button').disabled = false;
     }
 }
-
-// Обработчики событий Telegram WebApp
-tg.onEvent('message', function(message) {
-    try {
-        const data = JSON.parse(message.data);
-        
-        if (data.type === 'subscription_check') {
-            if (data.success) {
-                sun += 50;
-                updateScore();
-                saveUserData();
-                alert('✅ ' + data.message);
-            } else {
-                alert('❌ ' + data.message);
-            }
-        } else if (data.type === 'premium_update') {
-            hasPremiumSkin = true;
-            updatePremiumButton();
-            saveUserData();
-            
-            createParticles(
-                window.innerWidth/2,
-                window.innerHeight/2,
-                '#ff0066',
-                15
-            );
-            
-            alert('✨ Premium скин успешно активирован!');
-        }
-    } catch (e) {
-        console.error('Error processing telegram message:', e);
-    }
-});

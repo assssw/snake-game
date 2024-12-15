@@ -33,30 +33,25 @@ def init_db():
         conn = sqlite3.connect('snake_game.db')
         c = conn.cursor()
         
-        # Удаляем старые таблицы если они есть
-        c.execute('DROP TABLE IF EXISTS users')
-        c.execute('DROP TABLE IF EXISTS transactions')
-        
-        # Создаем новые таблицы
+        # Создаем таблицу пользователей
         c.execute('''CREATE TABLE IF NOT EXISTS users
                      (user_id TEXT PRIMARY KEY,
                       username TEXT,
-                      best_score INTEGER DEFAULT 0,
                       sun INTEGER DEFAULT 0,
                       has_sun_skin BOOLEAN DEFAULT 0,
                       has_premium_skin BOOLEAN DEFAULT 0,
+                      subscription_task_completed BOOLEAN DEFAULT 0,
+                      referral_count INTEGER DEFAULT 0,
                       last_game TEXT,
-                      registration_date TEXT,
-                      referrer_id TEXT,
-                      referral_count INTEGER DEFAULT 0)''')
+                      registration_date TEXT)''')
         
+        # Создаем таблицу транзакций
         c.execute('''CREATE TABLE IF NOT EXISTS transactions
                      (id INTEGER PRIMARY KEY AUTOINCREMENT,
                       user_id TEXT,
                       type TEXT,
                       amount INTEGER,
-                      timestamp TEXT,
-                      FOREIGN KEY (user_id) REFERENCES users(user_id))''')
+                      timestamp TEXT)''')
         
         conn.commit()
         logger.info("Database initialized successfully")
@@ -67,32 +62,6 @@ def init_db():
 
 init_db()
 
-def get_user_by_username(username):
-    try:
-        conn = sqlite3.connect('snake_game.db')
-        c = conn.cursor()
-        username = username.replace('@', '')
-        c.execute('SELECT * FROM users WHERE username = ?', (username,))
-        data = c.fetchone()
-        conn.close()
-        if data:
-            return {
-                'user_id': data[0],
-                'username': data[1],
-                'best_score': data[2],
-                'sun': data[3],
-                'has_sun_skin': bool(data[4]),
-                'has_premium_skin': bool(data[5]),
-                'last_game': data[6],
-                'registration_date': data[7],
-                'referrer_id': data[8],
-                'referral_count': data[9]
-            }
-        return None
-    except Exception as e:
-        logger.error(f"Error getting user by username: {e}")
-        return None
-
 def get_user_data(user_id):
     try:
         conn = sqlite3.connect('snake_game.db')
@@ -100,31 +69,20 @@ def get_user_data(user_id):
         c.execute('SELECT * FROM users WHERE user_id = ?', (str(user_id),))
         data = c.fetchone()
         conn.close()
+        
         if data:
             return {
                 'user_id': data[0],
                 'username': data[1],
-                'best_score': data[2],
-                'sun': data[3],
-                'has_sun_skin': bool(data[4]),
-                'has_premium_skin': bool(data[5]),
-                'last_game': data[6],
-                'registration_date': data[7],
-                'referrer_id': data[8],
-                'referral_count': data[9]
+                'sun': data[2],
+                'has_sun_skin': bool(data[3]),
+                'has_premium_skin': bool(data[4]),
+                'subscription_task_completed': bool(data[5]),
+                'referral_count': data[6],
+                'last_game': data[7],
+                'registration_date': data[8]
             }
-        return {
-            'user_id': str(user_id),
-            'username': None,
-            'best_score': 0,
-            'sun': 0,
-            'has_sun_skin': False,
-            'has_premium_skin': False,
-            'last_game': None,
-            'registration_date': None,
-            'referrer_id': None,
-            'referral_count': 0
-        }
+        return None
     except Exception as e:
         logger.error(f"Error getting user data: {e}")
         return None
@@ -134,18 +92,18 @@ def update_user_data(user_id, data):
         conn = sqlite3.connect('snake_game.db')
         c = conn.cursor()
         c.execute('''INSERT OR REPLACE INTO users 
-                     (user_id, username, best_score, sun, has_sun_skin, has_premium_skin, last_game, registration_date, referrer_id, referral_count)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                 (str(user_id), data.get('username'), data.get('best_score', 0),
-                  data.get('sun', 0), data.get('has_sun_skin', False),
-                  data.get('has_premium_skin', False), datetime.now().isoformat(),
-                  data.get('registration_date', datetime.now().isoformat()),
-                  data.get('referrer_id'), data.get('referral_count', 0)))
+                     (user_id, username, sun, has_sun_skin, has_premium_skin, 
+                      subscription_task_completed, referral_count, last_game, registration_date)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                 (str(user_id), data.get('username'), data.get('sun', 0),
+                  data.get('has_sun_skin', False), data.get('has_premium_skin', False),
+                  data.get('subscription_task_completed', False), data.get('referral_count', 0),
+                  data.get('last_game', datetime.now().isoformat()),
+                  data.get('registration_date', datetime.now().isoformat())))
         conn.commit()
-        logger.info(f"Updated data for user {user_id}: {data}")
+        logger.info(f"Updated data for user {user_id}")
     except Exception as e:
         logger.error(f"Error updating user data: {e}")
-        conn.rollback()
     finally:
         conn.close()
 
@@ -160,24 +118,8 @@ def log_transaction(user_id, type, amount):
         logger.info(f"Logged transaction: {user_id} {type} {amount}")
     except Exception as e:
         logger.error(f"Error logging transaction: {e}")
-        conn.rollback()
     finally:
         conn.close()
-
-def get_leaderboard():
-    try:
-        conn = sqlite3.connect('snake_game.db')
-        c = conn.cursor()
-        c.execute('''SELECT username, sun FROM users 
-                     WHERE username IS NOT NULL 
-                     ORDER BY sun DESC 
-                     LIMIT 10''')
-        data = c.fetchall()
-        conn.close()
-        return data
-    except Exception as e:
-        logger.error(f"Error getting leaderboard: {e}")
-        return []
 
 # Клавиатуры
 def get_webapp_keyboard():
@@ -199,7 +141,6 @@ def get_main_keyboard():
 @bot.message_handler(commands=['start'])
 def start(message):
     try:
-        logger.info(f"Start command from user {message.from_user.id} (@{message.from_user.username})")
         user_id = str(message.from_user.id)
         username = message.from_user.username
         
@@ -216,16 +157,16 @@ def start(message):
         
         # Регистрация нового пользователя
         user_data = get_user_data(user_id)
-        if not user_data.get('username'):
-            initial_sun = 20 if referrer_id else 0
+        if not user_data:
             user_data = {
+                'user_id': user_id,
                 'username': username,
-                'best_score': 0,
-                'sun': initial_sun,
+                'sun': 20 if referrer_id else 0,
                 'has_sun_skin': False,
                 'has_premium_skin': False,
-                'referrer_id': referrer_id,
+                'subscription_task_completed': False,
                 'referral_count': 0,
+                'last_game': None,
                 'registration_date': datetime.now().isoformat()
             }
             update_user_data(user_id, user_data)
@@ -233,37 +174,18 @@ def start(message):
             # Награждаем реферера
             if referrer_id:
                 referrer_data = get_user_data(referrer_id)
-                if referrer_data and referrer_data.get('username'):
-                    # Обновляем данные реферера
+                if referrer_data:
                     referrer_data['sun'] = referrer_data.get('sun', 0) + 20
                     referrer_data['referral_count'] = referrer_data.get('referral_count', 0) + 1
                     update_user_data(referrer_id, referrer_data)
-                    
-                    # Логируем транзакции
                     log_transaction(referrer_id, 'referral_bonus', 20)
-                    log_transaction(user_id, 'referral_registration', 20)
-                    
-                    # Уведомления
-                    bot.send_message(
-                        referrer_id, 
-                        f"🎉 Новый реферал @{username}! Получено:\n"
-                        f"• +20 ☀️ за приглашение\n"
-                        f"• 10% от фарма реферала"
-                    )
                     
                     bot.send_message(
-                        message.chat.id, 
-                        f"🎁 Добро пожаловать!\n\n"
-                        f"Вы получаете:\n"
-                        f"• +20 ☀️ за регистрацию по реферальной ссылке"
+                        referrer_id,
+                        f"🎉 Новый реферал @{username}!\n"
+                        f"Получено: +20 ☀️\n"
+                        f"Всего sun: {referrer_data['sun']}"
                     )
-            else:
-                bot.send_message(
-                    message.chat.id, 
-                    f"🎁 Добро пожаловать в игру!"
-                )
-            
-            logger.info(f"New user registered: {user_id} (@{username})")
         
         # Отправляем приветственное сообщение
         bot.send_message(
@@ -283,8 +205,9 @@ def start(message):
             "Выберите действие:",
             reply_markup=get_main_keyboard()
         )
+        
     except Exception as e:
-        logger.error(f"Error in start command: {e}\n{traceback.format_exc()}")
+        logger.error(f"Error in start command: {e}")
         bot.send_message(message.chat.id, "❌ Произошла ошибка при запуске")
 
 @bot.message_handler(func=lambda message: message.text == "🎮 Играть")
@@ -309,14 +232,22 @@ def play_button(message):
 @bot.message_handler(func=lambda message: message.text == "🏆 Лидерборд")
 def show_leaderboard_button(message):
     try:
-        leaderboard = get_leaderboard()
+        conn = sqlite3.connect('snake_game.db')
+        c = conn.cursor()
+        c.execute('''SELECT username, sun 
+                    FROM users 
+                    WHERE username IS NOT NULL 
+                    ORDER BY sun DESC 
+                    LIMIT 10''')
+        leaders = c.fetchall()
+        conn.close()
         
-        if not leaderboard:
+        if not leaders:
             bot.send_message(message.chat.id, "🏆 Пока нет игроков в топе")
             return
             
-        text = "🏆 Топ-10 игроков по sun:\n\n"
-        for i, (username, sun) in enumerate(leaderboard, 1):
+        text = "🏆 Топ-10 игроков:\n\n"
+        for i, (username, sun) in enumerate(leaders, 1):
             medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else "👑"
             text += f"{medal} {i}. @{username}\n└ {sun} ☀️\n\n"
         
@@ -324,10 +255,7 @@ def show_leaderboard_button(message):
         
     except Exception as e:
         logger.error(f"Error showing leaderboard: {e}")
-        bot.send_message(
-            message.chat.id,
-            "❌ Произошла ошибка при загрузке лидерборда"
-        )
+        bot.send_message(message.chat.id, "❌ Произошла ошибка при загрузке лидерборда")
 
 @bot.message_handler(func=lambda message: message.text == "👥 Рефералка")
 def show_referral_button(message):
@@ -339,33 +267,24 @@ def show_referral_button(message):
             )
             return
             
-        bot_username = bot.get_me().username
         user_id = str(message.from_user.id)
+        bot_username = bot.get_me().username
         link = f"https://t.me/{bot_username}?start={user_id}"
         
         user_data = get_user_data(user_id)
-        refs_count = user_data.get('referral_count', 0)
-        
-        # Получаем сумму всех реферальных бонусов
-        conn = sqlite3.connect('snake_game.db')
-        c = conn.cursor()
-        c.execute('''
-            SELECT SUM(amount) FROM transactions 
-            WHERE user_id = ? AND (type = 'referral_bonus' OR type = 'referral_farm_bonus')
-        ''', (user_id,))
-        total_ref_earnings = c.fetchone()[0] or 0
-        conn.close()
-        
+        if not user_data:
+            bot.send_message(message.chat.id, "❌ Ошибка получения данных")
+            return
+            
         text = (
             f"👥 Реферальная система\n\n"
             f"🔗 Ваша ссылка:\n{link}\n\n"
             f"📊 Статистика:\n"
-            f"• Рефералов: {refs_count}\n"
-            f"• Заработано с рефералов: {total_ref_earnings} ☀️\n\n"
+            f"• Рефералов: {user_data['referral_count']}\n"
+            f"• Sun: {user_data['sun']} ☀️\n\n"
             f"💰 Награды:\n"
             f"• +20 ☀️ за приглашение реферала\n"
-            f"• +10% от фарма рефералов\n"
-            f"• Реферал получает +20 ☀️\n\n"
+            f"• +10% от фарма рефералов\n\n"
             f"ℹ️ Отправьте эту ссылку друзьям и\n"
             f"получайте награды за их игру!"
         )
@@ -375,125 +294,11 @@ def show_referral_button(message):
         logger.error(f"Error showing referral: {e}")
         bot.send_message(message.chat.id, "❌ Произошла ошибка")
 
-@bot.message_handler(func=lambda message: message.text == "ℹ️ Помощь")
-def help_button(message):
-    try:
-        help_text = (
-            "🎮 Как играть:\n"
-            "• Управляйте змейкой стрелками или свайпами\n"
-            "• Собирайте яблоки для роста и получения sun\n"
-            "• Избегайте столкновений со стенами и хвостом\n\n"
-            "💰 Sun и скины:\n"
-            "• Sun можно потратить на скины в магазине\n"
-            "• Sun скин даёт +10% к фарму\n"
-            "• Premium скин даёт +50% к фарму\n\n"
-            "👥 Реферальная система:\n"
-            "• Приглашайте друзей и получайте награды\n"
-            "• +20 ☀️ за каждого реферала\n"
-            "• +10% от фарма рефералов"
-        )
-        bot.send_message(message.chat.id, help_text)
-    except Exception as e:
-        logger.error(f"Error showing help: {e}")
-        bot.send_message(message.chat.id, "❌ Произошла ошибка")
-
-# Админ команды
-@bot.message_handler(commands=['give_premium'])
-def give_premium(message):
-    if message.from_user.id != ADMIN_ID:
-        return
-    
-    try:
-        args = message.text.split()
-        if len(args) != 2:
-            bot.send_message(message.chat.id, "❌ Использование: /give_premium USERNAME")
-            return
-        
-        username = args[1].replace('@', '')
-        user_data = get_user_by_username(username)
-        
-        if not user_data:
-            bot.send_message(message.chat.id, f"❌ Пользователь @{username} не найден")
-            return
-        
-        user_data['has_premium_skin'] = True
-        update_user_data(user_data['user_id'], user_data)
-        log_transaction(user_data['user_id'], 'premium_given', 0)
-        
-        try:
-            bot.send_message(
-                int(user_data['user_id']),
-                "✨ Поздравляем! Вам выдан Premium скин!\n\n"
-                "Особенности Premium:\n"
-                "• Уникальный градиентный скин\n"
-                "• +50% к фарму sun\n"
-                "• Уменьшенный таймер между играми"
-            )
-            bot.send_message(
-                message.chat.id,
-                f"✅ Premium успешно выдан пользователю @{username}"
-            )
-        except Exception as e:
-            bot.send_message(
-                message.chat.id,
-                f"⚠️ Premium выдан, но не удалось отправить уведомление пользователю: {e}"
-            )
-            
-    except Exception as e:
-        logger.error(f"Error giving premium: {e}")
-        bot.send_message(
-            message.chat.id,
-            f"❌ Произошла ошибка при выдаче Premium: {e}"
-        )
-
-@bot.message_handler(commands=['remove_premium'])
-def remove_premium(message):
-    if message.from_user.id != ADMIN_ID:
-        return
-    
-    try:
-        args = message.text.split()
-        if len(args) != 2:
-            bot.send_message(message.chat.id, "❌ Использование: /remove_premium USERNAME")
-            return
-        
-        username = args[1].replace('@', '')
-        user_data = get_user_by_username(username)
-        
-        if not user_data:
-            bot.send_message(message.chat.id, f"❌ Пользователь @{username} не найден")
-            return
-        
-        user_data['has_premium_skin'] = False
-        update_user_data(user_data['user_id'], user_data)
-        log_transaction(user_data['user_id'], 'premium_removed', 0)
-        
-        try:
-            bot.send_message(
-                int(user_data['user_id']),
-                "❌ Ваш Premium скин был деактивирован"
-            )
-            bot.send_message(
-                message.chat.id,
-                f"✅ Premium успешно удален у пользователя @{username}"
-            )
-        except Exception as e:
-            bot.send_message(
-                message.chat.id,
-                f"⚠️ Premium удален, но не удалось отправить уведомление пользователю: {e}"
-            )
-            
-    except Exception as e:
-        logger.error(f"Error removing premium: {e}")
-        bot.send_message(
-            message.chat.id,
-            f"❌ Произошла ошибка при удалении Premium: {e}"
-        )
-
 @bot.message_handler(commands=['give_sun'])
 def give_sun(message):
     if message.from_user.id != ADMIN_ID:
         return
+    
     try:
         args = message.text.split()
         if len(args) != 3:
@@ -503,65 +308,59 @@ def give_sun(message):
         username = args[1].replace('@', '')
         amount = int(args[2])
         
-        user_data = get_user_by_username(username)
-        if user_data:
-            user_data['sun'] = user_data.get('sun', 0) + amount
-            update_user_data(user_data['user_id'], user_data)
-            log_transaction(user_data['user_id'], 'admin_give_sun', amount)
+        conn = sqlite3.connect('snake_game.db')
+        c = conn.cursor()
+        c.execute('SELECT user_id FROM users WHERE username = ?', (username,))
+        result = c.fetchone()
+        conn.close()
+        
+        if not result:
+            bot.send_message(message.chat.id, f"❌ Пользователь @{username} не найден")
+            return
             
-            bot.send_message(message.chat.id, f"✅ Выдано {amount} ☀️ пользователю @{username}")
-            bot.send_message(int(user_data['user_id']), f"🎁 Администратор выдал вам {amount} ☀️!")
-        else:
-            bot.send_message(message.chat.id, "❌ Пользователь не найден")
+        user_id = result[0]
+        user_data = get_user_data(user_id)
+        user_data['sun'] = user_data.get('sun', 0) + amount
+        update_user_data(user_id, user_data)
+        log_transaction(user_id, 'admin_give_sun', amount)
+        
+        bot.send_message(
+            user_id,
+            f"🎁 Администратор выдал вам {amount} ☀️!"
+        )
+        
+        bot.send_message(
+            message.chat.id,
+            f"✅ Выдано {amount} ☀️ пользователю @{username}"
+        )
+        
     except Exception as e:
         logger.error(f"Error giving sun: {e}")
         bot.send_message(message.chat.id, "❌ Использование: /give_sun USERNAME AMOUNT")
-
-@bot.message_handler(commands=['user_info'])
-def user_info(message):
-    if message.from_user.id != ADMIN_ID:
-        return
-    try:
-        username = message.text.split()[1].replace('@', '')
-        user_data = get_user_by_username(username)
-        
-        if user_data:
-            text = (
-                f"👤 Информация о пользователе:\n\n"
-                f"ID: {user_data['user_id']}\n"
-                f"Username: @{user_data['username']}\n"
-                f"Sun: {user_data['sun']}\n"
-                f"Sun скин: {'✅' if user_data['has_sun_skin'] else '❌'}\n"
-                f"Premium: {'✅' if user_data['has_premium_skin'] else '❌'}\n"
-                f"Последняя игра: {user_data['last_game']}\n"
-                f"Дата регистрации: {user_data['registration_date']}\n"
-                f"Рефералов: {user_data.get('referral_count', 0)}"
-            )
-            bot.send_message(message.chat.id, text)
-        else:
-            bot.send_message(message.chat.id, "❌ Пользователь не найден")
-    except Exception as e:
-        logger.error(f"Error showing user info: {e}")
-        bot.send_message(message.chat.id, "❌ Использование: /user_info USERNAME")
 
 @bot.message_handler(commands=['stats'])
 def admin_stats(message):
     if message.from_user.id != ADMIN_ID:
         return
+    
     try:
         conn = sqlite3.connect('snake_game.db')
         c = conn.cursor()
         
+        # Общее количество пользователей
         c.execute('SELECT COUNT(*) FROM users')
         total_users = c.fetchone()[0]
         
+        # Активные пользователи за 24 часа
         yesterday = (datetime.now() - timedelta(days=1)).isoformat()
         c.execute('SELECT COUNT(*) FROM users WHERE last_game > ?', (yesterday,))
         active_users = c.fetchone()[0]
         
+        # Общее количество sun
         c.execute('SELECT SUM(sun) FROM users')
         total_sun = c.fetchone()[0] or 0
         
+        # Количество Premium пользователей
         c.execute('SELECT COUNT(*) FROM users WHERE has_premium_skin = 1')
         premium_users = c.fetchone()[0]
         
@@ -576,6 +375,7 @@ def admin_stats(message):
         )
         
         bot.send_message(message.chat.id, text)
+        
     except Exception as e:
         logger.error(f"Error showing stats: {e}")
         bot.send_message(message.chat.id, f"❌ Ошибка: {e}")
@@ -584,6 +384,7 @@ def admin_stats(message):
 def broadcast(message):
     if message.from_user.id != ADMIN_ID:
         return
+    
     try:
         text = message.text.split(maxsplit=1)[1]
         
@@ -609,38 +410,10 @@ def broadcast(message):
             f"Успешно: {success}\n"
             f"Ошибок: {failed}"
         )
+        
     except Exception as e:
         logger.error(f"Error broadcasting: {e}")
         bot.send_message(message.chat.id, "❌ Использование: /broadcast ТЕКСТ")
-
-@bot.message_handler(commands=['clear_db'])
-def clear_database(message):
-    if message.from_user.id != ADMIN_ID:
-        return
-    try:
-        # Сначала уведомляем всех пользователей
-        conn = sqlite3.connect('snake_game.db')
-        c = conn.cursor()
-        c.execute('SELECT user_id FROM users')
-        users = c.fetchall()
-        conn.close()
-        
-        for user in users:
-            try:
-                bot.send_message(
-                    user[0],
-                    "🔄 База данных очищена. Перезапустите игру.",
-                    reply_markup=get_webapp_keyboard()
-                )
-            except:
-                continue
-        
-        # Затем очищаем базу
-        init_db()
-        bot.send_message(message.chat.id, "✅ База данных очищена")
-    except Exception as e:
-        logger.error(f"Error clearing database: {e}")
-        bot.send_message(message.chat.id, f"❌ Ошибка: {e}")
 
 # Обработчик данных от веб-приложения
 @bot.message_handler(content_types=['web_app_data'])
@@ -650,31 +423,29 @@ def web_app_data(message):
         user_id = str(message.from_user.id)
         user_data = get_user_data(user_id)
         
-        # Получаем данные о заработанном sun
+        if not user_data:
+            logger.error(f"User data not found: {user_id}")
+            return
+            
+        # Обновляем данные пользователя
         earned_sun = data.get('sun', 0) - user_data.get('sun', 0)
+        user_data['sun'] = data.get('sun', user_data.get('sun', 0))
+        user_data['last_game'] = datetime.now().isoformat()
         
-        # Если есть реферер, начисляем ему 10%
-        if user_data.get('referrer_id'):
+        # Если есть реферер, начисляем ему бонус
+        if user_data.get('referrer_id') and earned_sun > 0:
             referrer_data = get_user_data(user_data['referrer_id'])
-            if referrer_data and referrer_data.get('username') and earned_sun > 0:
+            if referrer_data:
                 referral_bonus = int(earned_sun * 0.1)  # 10% от заработка
                 referrer_data['sun'] = referrer_data.get('sun', 0) + referral_bonus
                 update_user_data(user_data['referrer_id'], referrer_data)
                 log_transaction(user_data['referrer_id'], 'referral_farm_bonus', referral_bonus)
-                try:
-                    bot.send_message(
-                        user_data['referrer_id'],
-                        f"💰 Ваш реферал заработал {earned_sun} ☀️\n"
-                        f"Ваш бонус: +{referral_bonus} ☀️"
-                    )
-                except:
-                    logger.error(f"Could not send referral bonus message to {user_data['referrer_id']}")
-        
-        # Обновляем данные пользователя
-        user_data['sun'] = data.get('sun', user_data.get('sun', 0))
-        user_data['has_sun_skin'] = data.get('hasSunSkin', user_data.get('has_sun_skin', False))
-        user_data['has_premium_skin'] = data.get('hasPremiumSkin', user_data.get('has_premium_skin', False))
-        user_data['last_game'] = datetime.now().isoformat()
+                
+                bot.send_message(
+                    user_data['referrer_id'],
+                    f"💰 Ваш реферал заработал {earned_sun} ☀️\n"
+                    f"Ваш бонус: +{referral_bonus} ☀️"
+                )
         
         update_user_data(user_id, user_data)
         
@@ -684,34 +455,15 @@ def web_app_data(message):
             f"🎮 Игра завершена!\n\n"
             f"📊 Статистика:\n"
             f"☀️ Заработано: {earned_sun}\n"
-            f"💰 Всего sun: {data.get('sun', 0)}"
+            f"💰 Всего sun: {user_data['sun']}"
         )
         
     except Exception as e:
         logger.error(f"Error processing web app data: {e}\n{traceback.format_exc()}")
-        bot.send_message(
-            message.chat.id,
-            "❌ Произошла ошибка при сохранении прогресса"
-        )
-
-# Функция резервного копирования для Windows
-def backup_data():
-    while True:
-        try:
-            os.system('copy snake_game.db snake_game_backup.db')
-            logger.info("Database backup created")
-        except Exception as e:
-            logger.error(f"Backup error: {e}")
-        time.sleep(3600)
+        bot.send_message(message.chat.id, "❌ Произошла ошибка при сохранении прогресса")
 
 # Запуск бота
 if __name__ == '__main__':
-    # Запускаем резервное копирование в отдельном потоке
-    backup_thread = threading.Thread(target=backup_data)
-    backup_thread.daemon = True
-    backup_thread.start()
-    
-    # Запускаем бота
     logger.info("Bot started")
     try:
         bot.infinity_polling(timeout=10, long_polling_timeout=5)
