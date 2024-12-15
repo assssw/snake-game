@@ -3,13 +3,16 @@ const tg = window.Telegram.WebApp;
 tg.expand();
 
 // API URL
-const API_URL = window.location.hostname === 'assssw.github.io' 
-    ? 'http://127.0.0.1:5000'  // Для локального тестирования
-    : 'http://127.0.0.1:5000';
+const API_URL = 'http://127.0.0.1:5000';
+
+// Добавляем заголовки для запросов
+const headers = {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*'
+};
 
 console.log('Game initialization started');
 console.log('API URL:', API_URL);
-console.log('Hostname:', window.location.hostname);
 
 // Фиксим дергание экрана
 document.body.style.overflow = 'hidden';
@@ -19,7 +22,11 @@ document.documentElement.style.overflow = 'hidden';
 window.addEventListener('DOMContentLoaded', async () => {
     console.log('DOM loaded, checking API...');
     try {
-        const response = await fetch(`${API_URL}/api/test`);
+        const response = await fetch(`${API_URL}/api/test`, {
+            method: 'GET',
+            headers: headers,
+            mode: 'cors'
+        });
         const data = await response.json();
         console.log('API test response:', data);
         if (data.status === 'ok') {
@@ -29,10 +36,12 @@ window.addEventListener('DOMContentLoaded', async () => {
             alert('Ошибка подключения к серверу');
         }
     } catch (e) {
-        console.error('API connection error:', e);
+        console.error('API error:', e);
         alert('Ошибка подключения к серверу');
     }
 });
+
+// ... остальной код game.js остается без изменений ...
 
 // Игровые переменные
 let canvas = document.getElementById('gameCanvas');
