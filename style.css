@@ -20,6 +20,7 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
     overscroll-behavior: none;
+    overflow: hidden;
 }
 
 /* Анимированный фон */
@@ -467,12 +468,12 @@ body::after {
 
 .check-button {
     opacity: 0.5;
-    cursor: not-allowed;
+    pointer-events: none;
 }
 
 .check-button:not(:disabled) {
     opacity: 1;
-    cursor: pointer;
+    pointer-events: auto;
     animation: glowPulse 2s infinite;
 }
 
@@ -540,6 +541,21 @@ body::after {
 
 @keyframes timerPulse {
     50% { opacity: 0.7; }
+}
+
+/* Стили для активных скинов */
+.button[data-active="true"] {
+    background: linear-gradient(45deg, #45a049, #2d692f);
+    box-shadow: 0 0 15px rgba(69, 160, 73, 0.6);
+}
+
+.shop-item button {
+    transition: all 0.3s ease;
+}
+
+.shop-item button.active {
+    background: #45a049;
+    box-shadow: 0 0 10px rgba(69, 160, 73, 0.5);
 }
 
 /* Медиа запросы */

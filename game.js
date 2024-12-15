@@ -2,10 +2,9 @@
 const tg = window.Telegram.WebApp;
 tg.expand();
 
-// Пустая функция для отладочных сообщений
-function debug(message, type = 'info') {
-    // Ничего не делаем
-}
+// Фиксим дергание экрана
+document.body.style.overflow = 'hidden';
+document.documentElement.style.overflow = 'hidden';
 
 // Игровые переменные
 let canvas = document.getElementById('gameCanvas');
@@ -36,6 +35,7 @@ let moveTimer = null;
 let gameSpeed = 125; // Начальная скорость 125мс
 const minGameSpeed = 30; // Минимальная скорость 30мс
 let speedTimer = null; // Таймер для увеличения скорости
+let activeSkin = 'default';
 
 // Функция для создания анимированных частиц
 function createParticles(x, y, color, count = 5) {
@@ -106,9 +106,9 @@ function createScorePopup(x, y, amount, type = 'score') {
 function resizeCanvas() {
     const container = document.querySelector('.game-wrapper');
     const size = Math.min(container.clientWidth, window.innerHeight * 0.6);
-    canvas.width = size;
-    canvas.height = size;
-    gridSize = size / tileCount;
+    canvas.width = Math.floor(size);
+    canvas.height = Math.floor(size);
+    gridSize = Math.floor(size / tileCount);
 }
 
 // Инициализация при загрузке
@@ -120,10 +120,6 @@ window.onload = function() {
     updateTimer();
     setInterval(updateTimer, 1000);
     optimizeRendering();
-    
-    const gameBackground = document.createElement('div');
-    gameBackground.className = 'game-background';
-    document.body.appendChild(gameBackground);
 };
 
 // Оптимизация производительности
@@ -177,18 +173,6 @@ function showShop() {
     }
 }
 
-function showTasks() {
-    if (!isGameRunning) {
-        hideAllContainers();
-        setTimeout(() => {
-            const tasks = document.getElementById('tasks-container');
-            tasks.style.display = 'block';
-            tasks.style.animation = 'fadeIn 0.3s ease-out';
-            document.querySelector('.back-button').style.display = 'flex';
-        }, 300);
-    }
-}
-
 // Игровые функции
 function tryStartGame() {
     const now = Date.now();
@@ -217,21 +201,19 @@ function startGame() {
         
         isGameRunning = true;
         lastGameTime = Date.now();
-        gameSpeed = 125; // Начальная скорость
+        gameSpeed = 125;
         saveUserData();
         
-        // Запускаем игровой цикл с фиксированным интервалом
         moveTimer = setInterval(updateGame, gameSpeed);
         requestAnimationFrame(gameLoop);
         
-        // Запускаем таймер увеличения скорости
         speedTimer = setInterval(() => {
             if (gameSpeed > minGameSpeed) {
                 gameSpeed = Math.max(minGameSpeed, gameSpeed - 1);
                 clearInterval(moveTimer);
                 moveTimer = setInterval(updateGame, gameSpeed);
             }
-        }, 1000); // Увеличиваем скорость каждую секунду
+        }, 1000);
         
         createParticles(canvas.width / 2, canvas.height / 2, '#4CAF50', 10);
     }, 300);
@@ -239,7 +221,6 @@ function startGame() {
 
 function gameLoop() {
     if (!isGameRunning) return;
-    
     render();
     requestAnimationFrame(gameLoop);
 }
@@ -615,21 +596,26 @@ function loadUserData() {
         hasPremiumSkin = data.hasPremiumSkin || false;
         activeSkin = data.activeSkin || 'default';
         lastGameTime = data.lastGameTime || 0;
-        hasVisitedChannel = data.hasVisitedChannel || false;
-        subscriptionCheckAttempts = data.subscriptionCheckAttempts || 0;
         
-        const checkButton = document.getElementById('check-subscription-button');
-        if (checkButton) {
-            checkButton.disabled = !hasVisitedChannel;
+        // Обновляем кнопки в магазине
+        if (hasSunSkin) {
+            document.getElementById('sun-skin-button').textContent = 
+                activeSkin === 'sun' ? 'Активен' : 'Выбрать';
         }
+        if (hasPremiumSkin) {
+            document.getElementById('premium-button').textContent = 
+                activeSkin === 'premium' ? 'Активен' : 'Выбрать';
+        }
+        document.getElementById('default-skin-button').textContent = 
+            activeSkin === 'default' ? 'Активен' : 'Выбрать';
         
+        // Проверяем, было ли задание выполнено
         const subscriptionTask = document.getElementById('subscription-task');
         if (subscriptionTask && data.subscriptionRewardReceived) {
-            subscriptionTask.style.display = 'none';
+            subscriptionTask.remove(); // Полностью удаляем элемент
         }
         
         updateSnakeColor();
-        updatePremiumButton();
     }
     document.getElementById('best-score').textContent = bestScore;
     document.getElementById('sun-balance').textContent = sun;
@@ -684,62 +670,65 @@ function updateSnakeColor() {
     }
 }
 
-function updatePremiumButton() {
-    const premiumButton = document.getElementById('premium-button');
-    if (hasPremiumSkin) {
-        premiumButton.textContent = activeSkin === 'premium' ? 'Активен' : 'Сменить';
-        premiumButton.classList.toggle('active', activeSkin === 'premium');
+// Функции для работы со скинами
+function handleSunSkin() {
+    if (hasSunSkin) {
+        if (activeSkin === 'sun') {
+            activeSkin = 'default';
+            document.getElementById('sun-skin-button').textContent = 'Выбрать';
+            alert('Sun скин деактивирован');
+        } else {
+            activeSkin = 'sun';
+            document.getElementById('sun-skin-button').textContent = 'Активен';
+            document.getElementById('default-skin-button').textContent = 'Выбрать';
+            document.getElementById('premium-button').textContent = hasPremiumSkin ? 'Выбрать' : 'Купить';
+            alert('Sun скин активирован! (+10% к фарму sun)');
+        }
+    } else if (sun >= 40) {
+        sun -= 40;
+        hasSunSkin = true;
+        activeSkin = 'sun';
+        document.getElementById('sun-skin-button').textContent = 'Активен';
+        document.getElementById('default-skin-button').textContent = 'Выбрать';
+        document.getElementById('premium-button').textContent = hasPremiumSkin ? 'Выбрать' : 'Купить';
+        updateScore();
+        alert('Вы приобрели Sun скин! (+10% к фарму sun)');
     } else {
-        premiumButton.textContent = 'Купить';
+        alert('Недостаточно sun! Нужно 40 ☀️');
     }
+    updateSnakeColor();
+    saveUserData();
 }
 
 function handlePremiumSkin() {
     if (hasPremiumSkin) {
-        activeSkin = activeSkin === 'premium' ? 'default' : 'premium';
+        if (activeSkin === 'premium') {
+            activeSkin = 'default';
+            document.getElementById('premium-button').textContent = 'Выбрать';
+            alert('Premium скин деактивирован');
+        } else {
+            activeSkin = 'premium';
+            document.getElementById('premium-button').textContent = 'Активен';
+            document.getElementById('default-skin-button').textContent = 'Выбрать';
+            document.getElementById('sun-skin-button').textContent = hasSunSkin ? 'Выбрать' : '40 ☀️';
+            alert('Premium скин активирован! (+50% к фарму sun)');
+        }
         updateSnakeColor();
-        updatePremiumButton();
         saveUserData();
-        
-        const canvasRect = canvas.getBoundingClientRect();
-        createParticles(
-            canvasRect.left + canvas.width/2,
-            canvasRect.top + canvas.height/2,
-            activeSkin === 'premium' ? '#ff0066' : '#4CAF50',
-            12
-        );
-        
-        alert(activeSkin === 'premium' ? 
-            '✨ Premium скин активирован! (+50% к фарму sun)' : 
-            'Premium скин деактивирован');
     } else {
         buyPremiumSkin();
     }
 }
 
-function buySunSkin() {
-    if (sun >= 1000 && !hasSunSkin) {
-        sun -= 1000;
-        hasSunSkin = true;
-        activeSkin = 'sun';
+function selectSkin(skinType) {
+    if (skinType === 'default') {
+        activeSkin = 'default';
+        document.getElementById('default-skin-button').textContent = 'Активен';
+        document.getElementById('sun-skin-button').textContent = hasSunSkin ? 'Выбрать' : '40 ☀️';
+        document.getElementById('premium-button').textContent = hasPremiumSkin ? 'Выбрать' : 'Купить';
+        alert('Базовый скин активирован');
         updateSnakeColor();
-        document.getElementById('sun-balance').textContent = sun;
-        
-        const button = document.querySelector('.shop-item:not(.premium) .button');
-        createParticles(
-            button.offsetLeft + button.offsetWidth/2,
-            button.offsetTop + button.offsetHeight/2,
-            '#ffd700',
-            10
-        );
-        
-        alert('Вы приобрели Sun скин! Теперь вы получаете +10% к фарму.');
         saveUserData();
-        sendDataToBot();
-    } else if (hasSunSkin) {
-        alert('У вас уже есть этот скин!');
-    } else {
-        alert('Недостаточно sun! Нужно 1000.');
     }
 }
 
@@ -747,34 +736,29 @@ function buyPremiumSkin() {
     tg.openTelegramLink('https://t.me/Kertiron');
 }
 
+// Функции для работы с заданиями
 function handleChannelVisit() {
     try {
-        const channelWindow = window.open('https://t.me/mariartytt', '_blank');
-        
-        if (channelWindow) {
-            hasVisitedChannel = true;
-            document.getElementById('check-subscription-button').disabled = false;
-            saveUserData();
-        } else {
-            window.location.href = 'https://t.me/mariartytt';
-            
-            setTimeout(() => {
-                hasVisitedChannel = true;
-                document.getElementById('check-subscription-button').disabled = false;
-                saveUserData();
-            }, 1000);
-        }
+        tg.openTelegramLink('https://t.me/mariartytt');
+        hasVisitedChannel = true;
+        document.getElementById('check-subscription-button').disabled = false;
+        saveUserData();
     } catch (e) {
-        window.location.href = 'https://t.me/mariartytt';
+        console.error('Error opening channel:', e);
     }
 }
 
 function checkSubscription() {
+    if (!hasVisitedChannel) {
+        alert('Сначала перейдите по ссылке на канал!');
+        return;
+    }
+
     subscriptionCheckAttempts++;
+    saveUserData();
     
     if (subscriptionCheckAttempts === 1) {
         alert('❌ Подписка не найдена. Попробуйте еще раз через несколько секунд.');
-        saveUserData();
         return;
     }
     
@@ -782,20 +766,143 @@ function checkSubscription() {
     updateScore();
     
     const task = document.getElementById('subscription-task');
-    task.classList.add('completed');
-    createParticles(
-        task.offsetLeft + task.offsetWidth/2,
-        task.offsetTop + task.offsetHeight/2,
-        '#4CAF50',
-        8
+    if (task) {
+        task.classList.add('completed');
+        createParticles(
+            task.offsetLeft + task.offsetWidth/2,
+            task.offsetTop + task.offsetHeight/2,
+            '#4CAF50',
+            8
+        );
+        
+        setTimeout(() => {
+            task.remove();
+        }, 500);
+        
+        const savedData = JSON.parse(localStorage.getItem('starSnakeData') || '{}');
+        savedData.subscriptionRewardReceived = true;
+        localStorage.setItem('starSnakeData', JSON.stringify(savedData));
+        
+        alert('✅ Награда получена: +50 ☀️');
+        saveUserData();
+        sendDataToBot();
+    }
+}
+
+function render() {
+    ctx.fillStyle = 'black';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    for (let i = 0; i < trail.length; i++) {
+        if (i === trail.length - 1) {
+            if (activeSkin === 'premium') {
+                const gradient = ctx.createLinearGradient(
+                    trail[i].x * gridSize,
+                    trail[i].y * gridSize,
+                    (trail[i].x + 1) * gridSize,
+                    (trail[i].y + 1) * gridSize
+                );
+                gradient.addColorStop(0, '#ff0066');
+                gradient.addColorStop(1, '#6600ff');
+                ctx.fillStyle = gradient;
+            } else {
+                ctx.fillStyle = snakeColor;
+            }
+
+            ctx.save();
+            ctx.translate(
+                trail[i].x * gridSize + gridSize/2,
+                trail[i].y * gridSize + gridSize/2
+            );
+            
+            if (dx === 1) ctx.rotate(0);
+            else if (dx === -1) ctx.rotate(Math.PI);
+            else if (dy === 1) ctx.rotate(Math.PI/2);
+            else if (dy === -1) ctx.rotate(-Math.PI/2);
+            
+            ctx.fillRect(-gridSize/2 + 1, -gridSize/2 + 1, gridSize - 2, gridSize - 2);
+
+            // Рисуем глаза
+            ctx.fillStyle = 'white';
+            const eyeSize = gridSize / 6;
+            const eyeOffset = gridSize / 4;
+            
+            ctx.beginPath();
+            ctx.arc(-eyeOffset, -eyeOffset, eyeSize, 0, Math.PI * 2);
+            ctx.arc(eyeOffset, -eyeOffset, eyeSize, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = 'black';
+            ctx.beginPath();
+            ctx.arc(-eyeOffset, -eyeOffset, eyeSize/2, 0, Math.PI * 2);
+            ctx.arc(eyeOffset, -eyeOffset, eyeSize/2, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.restore();
+        } else {
+            if (activeSkin === 'premium') {
+                const gradient = ctx.createLinearGradient(
+                    trail[i].x * gridSize,
+                    trail[i].y * gridSize,
+                    (trail[i].x + 1) * gridSize,
+                    (trail[i].y + 1) * gridSize
+                );
+                gradient.addColorStop(0, '#ff0066');
+                gradient.addColorStop(1, '#6600ff');
+                ctx.fillStyle = gradient;
+                
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#ff0066';
+            } else {
+                ctx.fillStyle = snakeColor;
+            }
+            
+            ctx.fillRect(
+                trail[i].x * gridSize + 1,
+                trail[i].y * gridSize + 1,
+                gridSize - 2,
+                gridSize - 2
+            );
+            
+            ctx.shadowBlur = 0;
+        }
+    }
+
+    // Рисуем яблоко
+    ctx.save();
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = "red";
+    
+    const appleGradient = ctx.createRadialGradient(
+        appleX * gridSize + gridSize/2,
+        appleY * gridSize + gridSize/2,
+        0,
+        appleX * gridSize + gridSize/2,
+        appleY * gridSize + gridSize/2,
+        gridSize/2
     );
+    appleGradient.addColorStop(0, '#ff0000');
+    appleGradient.addColorStop(1, '#990000');
+    ctx.fillStyle = appleGradient;
     
-    setTimeout(() => {
-        task.style.display = 'none';
-    }, 500);
+    const pulseScale = 1 + Math.sin(Date.now() / 200) * 0.1;
+    ctx.translate(
+        appleX * gridSize + gridSize/2,
+        appleY * gridSize + gridSize/2
+    );
+    ctx.scale(pulseScale, pulseScale);
     
-    alert('✅ Награда получена: +50 ☀️');
-    saveUserData();
+    ctx.beginPath();
+    ctx.arc(0, 0, gridSize/2 - 1, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Блик на яблоке
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.beginPath();
+    ctx.arc(-gridSize/6, -gridSize/6, gridSize/6, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.restore();
 }
 
 function sendDataToBot(data = null) {
@@ -809,10 +916,11 @@ function sendDataToBot(data = null) {
         };
         tg.sendData(JSON.stringify(dataToSend));
     } catch (e) {
-        // Игнорируем ошибки
+        console.error('Error sending data to bot:', e);
     }
 }
 
+// Обработчики событий Telegram WebApp
 tg.onEvent('message', function(message) {
     try {
         const data = JSON.parse(message.data);
@@ -831,7 +939,6 @@ tg.onEvent('message', function(message) {
             updatePremiumButton();
             saveUserData();
             
-            // Анимация получения Premium
             createParticles(
                 window.innerWidth/2,
                 window.innerHeight/2,
@@ -842,6 +949,7 @@ tg.onEvent('message', function(message) {
             alert('✨ Premium скин успешно активирован!');
         }
     } catch (e) {
-        // Игнорируем ошибки
+        console.error('Error processing telegram message:', e);
     }
 });
+    
