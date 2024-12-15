@@ -5,13 +5,12 @@ import os
 from datetime import datetime
 
 app = Flask(__name__)
-CORS(app)  # Простой CORS для всех запросов
 
 @app.after_request
 def after_request(response):
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
-    response.headers.add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+    response.headers.set('Access-Control-Allow-Origin', '*')
+    response.headers.set('Access-Control-Allow-Headers', 'Content-Type')
+    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
     return response
 
 def get_db():
@@ -252,4 +251,4 @@ def update_game():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)
