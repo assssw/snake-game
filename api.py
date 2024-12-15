@@ -5,15 +5,25 @@ import os
 from datetime import datetime
 
 app = Flask(__name__)
+
+# Новые настройки CORS
 CORS(app, resources={
     r"/*": {
-        "origins": ["https://assssw.github.io", "http://localhost:5000", "http://127.0.0.1:5000"],
+        "origins": "*",
         "methods": ["GET", "POST", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization"],
-        "expose_headers": ["Content-Type", "X-CSRFToken"],
-        "supports_credentials": True
+        "expose_headers": ["Content-Type"],
+        "supports_credentials": True,
+        "send_wildcard": True
     }
 })
+
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
 
 def get_db():
     try:
@@ -253,4 +263,4 @@ def update_game():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(port=5000, debug=True)
+    app.run(debug=True)
