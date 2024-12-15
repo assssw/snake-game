@@ -3,7 +3,11 @@ const tg = window.Telegram.WebApp;
 tg.expand();
 
 // API URL
-const API_URL = 'http://127.0.0.1:5000';
+const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'http://127.0.0.1:5000'
+    : 'https://your-domain.com';  // Замените на ваш домен
+
+console.log('API URL:', API_URL);
 
 // Фиксим дергание экрана
 document.body.style.overflow = 'hidden';
@@ -35,9 +39,9 @@ let hasPremiumSkin = false;
 let lastGameTime = 0;
 let bestScore = 0;
 let moveTimer = null;
-let gameSpeed = 125; // Начальная скорость 125мс
-const minGameSpeed = 30; // Минимальная скорость 30мс
-let speedTimer = null; // Таймер для увеличения скорости
+let gameSpeed = 125;
+const minGameSpeed = 30;
+let speedTimer = null;
 let activeSkin = 'default';
 let hasVisitedChannel = false;
 let subscriptionCheckAttempts = 0;
@@ -45,12 +49,13 @@ let subscriptionCheckAttempts = 0;
 // Функции для работы с API
 async function checkApiConnection() {
     try {
+        console.log('Checking API connection...');
         const response = await fetch(`${API_URL}/api/test`);
         if (response.ok) {
             console.log('API connection successful');
             return true;
         }
-        console.error('API connection failed');
+        console.error('API connection failed:', response.status);
         return false;
     } catch (e) {
         console.error('API connection error:', e);
@@ -61,6 +66,8 @@ async function checkApiConnection() {
 async function loadUserData() {
     try {
         const userId = tg.initDataUnsafe?.user?.id;
+        console.log('Loading data for user:', userId);
+        
         if (!userId) {
             console.error('User ID not found');
             return;
@@ -69,18 +76,18 @@ async function loadUserData() {
         const response = await fetch(`${API_URL}/api/user/${userId}`);
         const data = await response.json();
         
+        console.log('Loaded user data:', data);
+        
         if (data.error) {
             console.error('Error loading user data:', data.error);
             return;
         }
         
-        // Обновляем локальные данные
         sun = data.sun;
         hasSunSkin = data.has_sun_skin;
         hasPremiumSkin = data.has_premium_skin;
         updateScore();
         
-        console.log('User data loaded:', data);
     } catch (e) {
         console.error('Error loading user data:', e);
     }
@@ -120,11 +127,9 @@ async function updateGameData(score, earnedSun) {
             return;
         }
         
-        // Обновляем локальные данные
         sun = data.new_sun;
         updateScore();
         
-        // Отправляем данные в Telegram WebApp
         tg.sendData(JSON.stringify({
             sun: sun,
             score: score,
@@ -135,7 +140,6 @@ async function updateGameData(score, earnedSun) {
         console.error('Error updating game data:', e);
     }
 }
-
 // Функции для работы с частицами и анимациями
 function createParticles(x, y, color, count = 5) {
     for (let i = 0; i < count; i++) {

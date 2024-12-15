@@ -11,3 +11,6 @@
 2024-12-16 00:18:58,873 - __main__ - INFO - Updated data for user 7300319137
 2024-12-16 00:18:58,890 - __main__ - INFO - Updated data for user 1454515378
 2024-12-16 00:18:58,905 - __main__ - INFO - Logged transaction: 1454515378 referral_bonus 20
+2024-12-16 00:27:27,267 - __main__ - INFO - Bot initialization started
+2024-12-16 00:27:27,267 - __main__ - INFO - Database initialized successfully
+2024-12-16 00:27:27,267 - __main__ - INFO - Bot started

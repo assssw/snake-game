@@ -87,6 +87,19 @@
         <button class="button back-button" onclick="showMenu()">← Назад</button>
     </div>
 
+    <script>
+        // Проверка API при загрузке
+        window.addEventListener('DOMContentLoaded', async () => {
+            console.log('Checking API connection...');
+            try {
+                const response = await fetch('http://127.0.0.1:5000/api/test');
+                const data = await response.json();
+                console.log('API test response:', data);
+            } catch (e) {
+                console.error('API connection error:', e);
+            }
+        });
+    </script>
     <script src="game.js"></script>
 </body>
 </html>

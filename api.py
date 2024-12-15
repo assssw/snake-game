@@ -5,10 +5,14 @@ import os
 from datetime import datetime
 
 app = Flask(__name__)
-# Настраиваем CORS для всех источников (для тестирования)
-CORS(app)
+CORS(app, resources={
+    r"/*": {
+        "origins": "*",
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type"]
+    }
+})
 
-# Функция для подключения к базе данных
 def get_db():
     try:
         conn = sqlite3.connect('snake_game.db')
@@ -18,12 +22,21 @@ def get_db():
         print(f"Error connecting to database: {e}")
         return None
 
-# Тестовый эндпоинт для проверки работы API
+@app.before_request
+def log_request():
+    print(f"\n=== New Request ===")
+    print(f"Method: {request.method}")
+    print(f"URL: {request.url}")
+    print(f"Headers: {dict(request.headers)}")
+    if request.is_json:
+        print(f"Data: {request.get_json()}")
+    print("==================")
+
 @app.route('/api/test')
 def test_connection():
+    print("Test endpoint called")
     return jsonify({'status': 'ok'})
 
-# Главная страница с данными
 @app.route('/')
 def index():
     try:
@@ -162,7 +175,6 @@ def index():
                 </table>
             </div>
             <script>
-                // Автообновление каждые 30 секунд
                 setInterval(() => {
                     location.reload();
                 }, 30000);
@@ -176,7 +188,6 @@ def index():
     except Exception as e:
         return f"Ошибка: {str(e)}"
 
-# Получение данных пользователя
 @app.route('/api/user/<user_id>')
 def get_user(user_id):
     try:
@@ -202,15 +213,19 @@ def get_user(user_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Обновление игровых данных
 @app.route('/api/update_game', methods=['POST'])
 def update_game():
     try:
         data = request.json
+        print(f"Received game data: {data}")
+        
         user_id = data.get('user_id')
         score = data.get('score')
         earned_sun = data.get('earned_sun')
         
+        if not user_id or score is None or earned_sun is None:
+            return jsonify({'error': 'Missing data'}), 400
+            
         conn = get_db()
         if not conn:
             return jsonify({'error': 'Database connection error'}), 500
@@ -220,10 +235,11 @@ def update_game():
                    (earned_sun, datetime.now().isoformat(), user_id))
         conn.commit()
         
-        # Получаем обновленные данные
         cur.execute('SELECT sun FROM users WHERE user_id = ?', (user_id,))
         new_sun = cur.fetchone()['sun']
         conn.close()
+        
+        print(f"Updated user {user_id}: new_sun={new_sun}")
         
         return jsonify({
             'success': True,
@@ -231,49 +247,8 @@ def update_game():
             'score': score
         })
     except Exception as e:
+        print(f"Error in update_game: {e}")
         return jsonify({'error': str(e)}), 500
 
-# API для получения sun
-@app.route('/api/get_sun/<user_id>')
-def get_sun(user_id):
-    try:
-        conn = get_db()
-        if not conn:
-            return jsonify({'error': 'Database connection error'}), 500
-            
-        cur = conn.cursor()
-        cur.execute('SELECT sun FROM users WHERE user_id = ?', (user_id,))
-        result = cur.fetchone()
-        conn.close()
-        
-        return jsonify({'sun': result['sun'] if result else 0})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# API для обновления sun
-@app.route('/api/update_sun', methods=['POST'])
-def update_sun():
-    try:
-        data = request.json
-        user_id = data.get('user_id')
-        new_sun = data.get('sun')
-        
-        if not user_id or new_sun is None:
-            return jsonify({'error': 'Missing data'}), 400
-            
-        conn = get_db()
-        if not conn:
-            return jsonify({'error': 'Database connection error'}), 500
-            
-        cur = conn.cursor()
-        cur.execute('UPDATE users SET sun = ? WHERE user_id = ?', (new_sun, user_id))
-        conn.commit()
-        conn.close()
-        
-        return jsonify({'success': True})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# Запуск сервера
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
