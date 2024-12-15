@@ -432,7 +432,7 @@ def web_app_data(message):
         user_data['sun'] = data.get('sun', user_data.get('sun', 0))
         user_data['last_game'] = datetime.now().isoformat()
         
-        # Если есть реферер, начисляем ему бонус
+        # Если есть реферер, начисляем бонус
         if user_data.get('referrer_id') and earned_sun > 0:
             referrer_data = get_user_data(user_data['referrer_id'])
             if referrer_data:

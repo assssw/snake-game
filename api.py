@@ -7,9 +7,11 @@ from datetime import datetime
 app = Flask(__name__)
 CORS(app, resources={
     r"/*": {
-        "origins": "*",
+        "origins": ["*"],
         "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type"]
+        "allow_headers": ["Content-Type", "Authorization"],
+        "expose_headers": ["Content-Type", "X-CSRFToken"],
+        "supports_credentials": True
     }
 })
 

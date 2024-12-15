@@ -90,11 +90,21 @@
     <script>
         // Проверка API при загрузке
         window.addEventListener('DOMContentLoaded', async () => {
-            console.log('Checking API connection...');
+            console.log('Page loaded, checking API...');
             try {
-                const response = await fetch('http://127.0.0.1:5000/api/test');
+                const response = await fetch('http://127.0.0.1:5000/api/test', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
                 const data = await response.json();
                 console.log('API test response:', data);
+                if (data.status === 'ok') {
+                    console.log('API connection successful');
+                } else {
+                    console.error('API test failed');
+                }
             } catch (e) {
                 console.error('API connection error:', e);
             }

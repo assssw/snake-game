@@ -3,9 +3,7 @@ const tg = window.Telegram.WebApp;
 tg.expand();
 
 // API URL
-const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    ? 'http://127.0.0.1:5000'
-    : 'https://your-domain.com';  // Замените на ваш домен
+const API_URL = 'http://127.0.0.1:5000';
 
 console.log('API URL:', API_URL);
 
@@ -130,6 +128,7 @@ async function updateGameData(score, earnedSun) {
         sun = data.new_sun;
         updateScore();
         
+        // Отправляем данные в Telegram WebApp
         tg.sendData(JSON.stringify({
             sun: sun,
             score: score,
@@ -238,7 +237,6 @@ function optimizeRendering() {
     gameWrapper.style.backfaceVisibility = 'hidden';
     gameWrapper.style.transform = 'translateZ(0)';
 }
-
 // Функции навигации по меню
 function hideAllContainers() {
     ['main-menu', 'game-container', 'shop-container', 'tasks-container'].forEach(id => {
@@ -390,7 +388,6 @@ function updateGame() {
         placeApple();
     }
 }
-
 function render() {
     // Очистка канваса
     ctx.fillStyle = 'rgba(10, 10, 46, 0.8)';
@@ -510,7 +507,6 @@ function render() {
     
     ctx.restore();
 }
-
 function gameOver() {
     isGameRunning = false;
     
@@ -518,7 +514,7 @@ function gameOver() {
     if (speedTimer) clearInterval(speedTimer);
     if (animationFrame) cancelAnimationFrame(animationFrame);
     
-    // Отправляем данные на сервер
+    // Отправляем данные на сервер и в Telegram WebApp
     updateGameData(score, sun);
     
     const canvasRect = canvas.getBoundingClientRect();
@@ -642,7 +638,6 @@ function placeApple() {
     const appleScreenY = canvasRect.top + appleY * gridSize + gridSize/2;
     createParticles(appleScreenX, appleScreenY, '#ff0000', 6);
 }
-
 // Обработчики управления
 function handleKeyPress(e) {
     if (!isGameRunning) return;

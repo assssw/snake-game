@@ -254,98 +254,6 @@ body::after {
     animation: gameOverText 0.8s ease-out 0.6s both;
 }
 
-/* Анимации */
-@keyframes menuAppear {
-    from { 
-        opacity: 0;
-        transform: translateY(-20px);
-    }
-    to { 
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-@keyframes textGlow {
-    0% { text-shadow: 0 0 10px #4CAF50; }
-    50% { text-shadow: 0 0 20px #4CAF50; }
-    100% { text-shadow: 0 0 10px #4CAF50; }
-}
-
-@keyframes scoreHighlight {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.1); background: rgba(255, 215, 0, 0.3); }
-    100% { transform: scale(1); }
-}
-
-@keyframes glowPulse {
-    0% { box-shadow: 0 0 5px rgba(76, 175, 80, 0.5); }
-    50% { box-shadow: 0 0 20px rgba(76, 175, 80, 0.8); }
-    100% { box-shadow: 0 0 5px rgba(76, 175, 80, 0.5); }
-}
-
-@keyframes timerPulse {
-    50% { opacity: 0.7; }
-}
-
-@keyframes gameOverAppear {
-    0% { transform: scale(2); opacity: 0; }
-    50% { transform: scale(0.9); opacity: 0.9; }
-    100% { transform: scale(1); opacity: 1; }
-}
-
-@keyframes gameOverText {
-    0% { transform: translateY(-50px); opacity: 0; }
-    100% { transform: translateY(0); opacity: 1; }
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-
-@keyframes fadeOut {
-    from { opacity: 1; }
-    to { opacity: 0; }
-}
-
-/* Медиа запросы */
-@media (max-width: 768px) {
-    .container {
-        padding: 10px;
-    }
-
-    .glow-text {
-        font-size: 28px;
-    }
-
-    .button {
-        font-size: 14px;
-    }
-
-    .game-over-title {
-        font-size: 36px;
-    }
-
-    .game-over-stats p {
-        font-size: 18px;
-    }
-
-    .game-over-buttons {
-        flex-direction: column;
-        width: 80%;
-        max-width: 300px;
-    }
-}
-
-/* Специальные стили для Telegram Mini App */
-@media (display-mode: standalone) {
-    body {
-        padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-    }
-}
-/* Добавляем после существующих стилей */
-
 /* Магазин */
 #shop-container {
     display: none;
@@ -454,7 +362,72 @@ body::after {
     animation: scorePopup 0.8s ease-out forwards;
 }
 
-/* Дополнительные анимации */
+/* Кнопка назад */
+.back-button {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    padding: 10px 20px;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    border-radius: 8px;
+    color: white;
+    cursor: pointer;
+    display: none;
+    z-index: 100;
+    transition: all 0.3s ease;
+}
+
+.back-button:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: translateX(-5px);
+}
+
+/* Анимации */
+@keyframes menuAppear {
+    from { 
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to { 
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes textGlow {
+    0% { text-shadow: 0 0 10px #4CAF50; }
+    50% { text-shadow: 0 0 20px #4CAF50; }
+    100% { text-shadow: 0 0 10px #4CAF50; }
+}
+
+@keyframes scoreHighlight {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); background: rgba(255, 215, 0, 0.3); }
+    100% { transform: scale(1); }
+}
+
+@keyframes glowPulse {
+    0% { box-shadow: 0 0 5px rgba(76, 175, 80, 0.5); }
+    50% { box-shadow: 0 0 20px rgba(76, 175, 80, 0.8); }
+    100% { box-shadow: 0 0 5px rgba(76, 175, 80, 0.5); }
+}
+
+@keyframes timerPulse {
+    50% { opacity: 0.7; }
+}
+
+@keyframes gameOverAppear {
+    0% { transform: scale(2); opacity: 0; }
+    50% { transform: scale(0.9); opacity: 0.9; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes gameOverText {
+    0% { transform: translateY(-50px); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+}
+
 @keyframes taskComplete {
     0% { transform: scale(1); }
     50% { transform: scale(1.05); background: rgba(76, 175, 80, 0.3); }
@@ -477,42 +450,48 @@ body::after {
     100% { transform: translateY(0); }
 }
 
-/* Адаптивность для магазина и заданий */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+/* Медиа запросы */
 @media (max-width: 768px) {
-    .shop-items {
-        grid-template-columns: 1fr;
+    .container {
+        padding: 10px;
     }
-    
-    .task-buttons {
-        flex-direction: column;
+
+    .glow-text {
+        font-size: 28px;
     }
-    
-    .shop-item h3 {
-        font-size: 20px;
+
+    .button {
+        font-size: 14px;
     }
-    
-    .task-item h3 {
+
+    .game-over-title {
+        font-size: 36px;
+    }
+
+    .game-over-stats p {
         font-size: 18px;
     }
+
+    .game-over-buttons {
+        flex-direction: column;
+        width: 80%;
+        max-width: 300px;
+    }
 }
 
-/* Кнопка назад */
-.back-button {
-    position: fixed;
-    bottom: 20px;
-    left: 20px;
-    padding: 10px 20px;
-    background: rgba(255, 255, 255, 0.1);
-    border: none;
-    border-radius: 8px;
-    color: white;
-    cursor: pointer;
-    display: none;
-    z-index: 100;
-    transition: all 0.3s ease;
-}
-
-.back-button:hover {
-    background: rgba(255, 255, 255, 0.2);
-    transform: translateX(-5px);
+/* Специальные стили для Telegram Mini App */
+@media (display-mode: standalone) {
+    body {
+        padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
 }
