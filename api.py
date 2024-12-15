@@ -6,24 +6,14 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-# Новые настройки CORS
+# Простые настройки CORS
 CORS(app, resources={
     r"/*": {
         "origins": "*",
         "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"],
-        "expose_headers": ["Content-Type"],
-        "supports_credentials": True,
-        "send_wildcard": True
+        "allow_headers": ["Content-Type", "Authorization"]
     }
 })
-
-@app.after_request
-def after_request(response):
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-    return response
 
 def get_db():
     try:
