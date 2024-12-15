@@ -3,13 +3,36 @@ const tg = window.Telegram.WebApp;
 tg.expand();
 
 // API URL
-const API_URL = 'http://127.0.0.1:5000';
+const API_URL = window.location.hostname === 'assssw.github.io' 
+    ? 'http://127.0.0.1:5000'  // Для локального тестирования
+    : 'http://127.0.0.1:5000';
 
+console.log('Game initialization started');
 console.log('API URL:', API_URL);
+console.log('Hostname:', window.location.hostname);
 
 // Фиксим дергание экрана
 document.body.style.overflow = 'hidden';
 document.documentElement.style.overflow = 'hidden';
+
+// Добавляем проверку API при загрузке
+window.addEventListener('DOMContentLoaded', async () => {
+    console.log('DOM loaded, checking API...');
+    try {
+        const response = await fetch(`${API_URL}/api/test`);
+        const data = await response.json();
+        console.log('API test response:', data);
+        if (data.status === 'ok') {
+            console.log('API connection successful');
+        } else {
+            console.error('API test failed');
+            alert('Ошибка подключения к серверу');
+        }
+    } catch (e) {
+        console.error('API connection error:', e);
+        alert('Ошибка подключения к серверу');
+    }
+});
 
 // Игровые переменные
 let canvas = document.getElementById('gameCanvas');
@@ -49,8 +72,11 @@ async function checkApiConnection() {
     try {
         console.log('Checking API connection...');
         const response = await fetch(`${API_URL}/api/test`);
+        console.log('API test response:', response);
+        
         if (response.ok) {
-            console.log('API connection successful');
+            const data = await response.json();
+            console.log('API test data:', data);
             return true;
         }
         console.error('API connection failed:', response.status);
@@ -139,6 +165,7 @@ async function updateGameData(score, earnedSun) {
         console.error('Error updating game data:', e);
     }
 }
+
 // Функции для работы с частицами и анимациями
 function createParticles(x, y, color, count = 5) {
     for (let i = 0; i < count; i++) {
@@ -237,6 +264,7 @@ function optimizeRendering() {
     gameWrapper.style.backfaceVisibility = 'hidden';
     gameWrapper.style.transform = 'translateZ(0)';
 }
+
 // Функции навигации по меню
 function hideAllContainers() {
     ['main-menu', 'game-container', 'shop-container', 'tasks-container'].forEach(id => {
@@ -388,6 +416,7 @@ function updateGame() {
         placeApple();
     }
 }
+
 function render() {
     // Очистка канваса
     ctx.fillStyle = 'rgba(10, 10, 46, 0.8)';
@@ -507,6 +536,7 @@ function render() {
     
     ctx.restore();
 }
+
 function gameOver() {
     isGameRunning = false;
     
@@ -638,6 +668,7 @@ function placeApple() {
     const appleScreenY = canvasRect.top + appleY * gridSize + gridSize/2;
     createParticles(appleScreenX, appleScreenY, '#ff0000', 6);
 }
+
 // Обработчики управления
 function handleKeyPress(e) {
     if (!isGameRunning) return;
@@ -765,6 +796,18 @@ function selectSkin(skinType) {
     }
 }
 
+function updateSnakeColor() {
+    switch(activeSkin) {
+        case 'sun':
+            snakeColor = '#ffd700';
+            break;
+        case 'premium':
+            snakeColor = 'gradient';
+            break;
+        default:
+            snakeColor = '#4CAF50';
+    }
+}
 function updateSnakeColor() {
     switch(activeSkin) {
         case 'sun':

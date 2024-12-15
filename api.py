@@ -7,7 +7,7 @@ from datetime import datetime
 app = Flask(__name__)
 CORS(app, resources={
     r"/*": {
-        "origins": ["*"],
+        "origins": ["https://assssw.github.io", "http://localhost:5000", "http://127.0.0.1:5000"],
         "methods": ["GET", "POST", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization"],
         "expose_headers": ["Content-Type", "X-CSRFToken"],
@@ -253,4 +253,4 @@ def update_game():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(port=5000, debug=True)
